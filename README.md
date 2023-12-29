@@ -10,7 +10,7 @@ modifications.
 groupcache is a caching and cache-filling library, intended as a
 replacement for memcached in many cases.
 
-For API docs and examples, see http://godoc.org/github.com/mailgun/groupcache/v2
+For API docs and examples, see http://godoc.org/github.com/modernprogram/groupcache/v2
 
    
 ### Modifications from original library
@@ -87,7 +87,7 @@ import (
     "log"
     "time"
 
-    "github.com/mailgun/groupcache/v2"
+    "github.com/modernprogram/groupcache/v2"
 )
 
 func ExampleUsage() {
