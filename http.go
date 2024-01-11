@@ -40,7 +40,7 @@ const defaultReplicas = 50
 
 // HTTPPool implements PeerPicker for a pool of HTTP peers.
 type HTTPPool struct {
-	ws *workspace
+	ws *Workspace
 
 	// this peer's base URL, e.g. "https://example.net:8000"
 	self string
@@ -82,7 +82,7 @@ type HTTPPoolOptions struct {
 // For convenience, it also registers itself as an http.Handler with http.DefaultServeMux.
 // The self argument should be a valid base URL that points to the current server,
 // for example "http://example.net:8000".
-func NewHTTPPoolWithWorkspace(ws *workspace, self string) *HTTPPool {
+func NewHTTPPoolWithWorkspace(ws *Workspace, self string) *HTTPPool {
 	p := NewHTTPPoolOptsWithWorkspace(ws, self, nil)
 	http.Handle(p.opts.BasePath, p)
 	return p
@@ -97,9 +97,9 @@ func NewHTTPPool(self string) *HTTPPool {
 }
 
 // NewHTTPPoolOptsWithWorkspace initializes an HTTP pool of peers with the given options.
-// Unlike NewHTTPPool, this function does not register the created pool as an HTTP handler.
+// Unlike NewHTTPPoolWithWorkspace, this function does not register the created pool as an HTTP handler.
 // The returned *HTTPPool implements http.Handler and must be registered using http.Handle.
-func NewHTTPPoolOptsWithWorkspace(ws *workspace, self string, o *HTTPPoolOptions) *HTTPPool {
+func NewHTTPPoolOptsWithWorkspace(ws *Workspace, self string, o *HTTPPoolOptions) *HTTPPool {
 	if ws.httpPoolMade {
 		panic("groupcache: NewHTTPPool must be called only once")
 	}

@@ -2,8 +2,8 @@ package groupcache
 
 import "sync"
 
-// workspace holds the "global" state for groupcache.
-type workspace struct {
+// Workspace holds the "global" state for groupcache.
+type Workspace struct {
 	httpPoolMade bool
 	portPicker   func(groupName string) PeerPicker
 
@@ -28,8 +28,8 @@ var DefaultWorkspace = NewWorkspace()
 // point, you should use the workspace-aware APIs.
 // In order to release current groupcache resources, your application
 // would drop all references to the workspace.
-func NewWorkspace() *workspace {
-	return &workspace{
+func NewWorkspace() *Workspace {
+	return &Workspace{
 		groups: make(map[string]*Group),
 	}
 }
