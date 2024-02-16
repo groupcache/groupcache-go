@@ -88,6 +88,7 @@ func NewHTTPPoolWithWorkspace(ws *Workspace, self string) *HTTPPool {
 	return p
 }
 
+/*
 // NewHTTPPool initializes an HTTP pool of peers, and registers itself as a PeerPicker.
 // For convenience, it also registers itself as an http.Handler with http.DefaultServeMux.
 // The self argument should be a valid base URL that points to the current server,
@@ -95,6 +96,7 @@ func NewHTTPPoolWithWorkspace(ws *Workspace, self string) *HTTPPool {
 func NewHTTPPool(self string) *HTTPPool {
 	return NewHTTPPoolWithWorkspace(DefaultWorkspace, self)
 }
+*/
 
 // NewHTTPPoolOptsWithWorkspace initializes an HTTP pool of peers with the given options.
 // Unlike NewHTTPPoolWithWorkspace, this function does not register the created pool as an HTTP handler.
@@ -125,12 +127,14 @@ func NewHTTPPoolOptsWithWorkspace(ws *Workspace, self string, o *HTTPPoolOptions
 	return p
 }
 
+/*
 // NewHTTPPoolOpts initializes an HTTP pool of peers with the given options.
 // Unlike NewHTTPPool, this function does not register the created pool as an HTTP handler.
 // The returned *HTTPPool implements http.Handler and must be registered using http.Handle.
 func NewHTTPPoolOpts(self string, o *HTTPPoolOptions) *HTTPPool {
 	return NewHTTPPoolOptsWithWorkspace(DefaultWorkspace, self, o)
 }
+*/
 
 // Set updates the pool's list of peers.
 // Each peer value should be a valid base URL,

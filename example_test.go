@@ -33,7 +33,7 @@ func ExampleUsage() {
 	*/
 
 	// Create a new group cache with a max cache size of 3MB
-	group := groupcache.NewGroup("users", 3000000, groupcache.GetterFunc(
+	group := groupcache.NewGroupWithWorkspace(groupcache.DefaultWorkspace, "users", 3000000, groupcache.GetterFunc(
 		func(ctx context.Context, id string, dest groupcache.Sink) error {
 
 			// In a real scenario we might fetch the value from a database.

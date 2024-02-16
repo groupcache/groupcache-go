@@ -59,7 +59,7 @@ const (
 )
 
 func testSetup() {
-	stringGroup = NewGroup(stringGroupName, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
+	stringGroup = NewGroupWithWorkspace(DefaultWorkspace, stringGroupName, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
 		if key == fromChan {
 			key = <-stringc
 		}
@@ -67,7 +67,7 @@ func testSetup() {
 		return dest.SetString("ECHO:"+key, time.Time{})
 	}))
 
-	protoGroup = NewGroup(protoGroupName, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
+	protoGroup = NewGroupWithWorkspace(DefaultWorkspace, protoGroupName, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
 		if key == fromChan {
 			key = <-stringc
 		}
@@ -78,7 +78,7 @@ func testSetup() {
 		}, time.Time{})
 	}))
 
-	expireGroup = NewGroup(expireGroupName, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
+	expireGroup = NewGroupWithWorkspace(DefaultWorkspace, expireGroupName, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
 		cacheFills.Add(1)
 		return dest.SetString("ECHO:"+key, time.Now().Add(time.Millisecond*100))
 	}))

@@ -77,11 +77,13 @@ func GetGroupWithWorkspace(ws *Workspace, name string) *Group {
 	return g
 }
 
+/*
 // GetGroup returns the named group previously created with NewGroup, or
 // nil if there's no such group.
 func GetGroup(name string) *Group {
 	return GetGroupWithWorkspace(DefaultWorkspace, name)
 }
+*/
 
 // NewGroupWithWorkspace creates a coordinated group-aware Getter from a Getter.
 //
@@ -96,6 +98,7 @@ func NewGroupWithWorkspace(ws *Workspace, name string, cacheBytes int64, getter 
 	return newGroup(ws, name, cacheBytes, getter, nil)
 }
 
+/*
 // NewGroup creates a coordinated group-aware Getter from a Getter.
 //
 // The returned Getter tries (but does not guarantee) to run only one
@@ -108,6 +111,7 @@ func NewGroupWithWorkspace(ws *Workspace, name string, cacheBytes int64, getter 
 func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 	return newGroup(DefaultWorkspace, name, cacheBytes, getter, nil)
 }
+*/
 
 // DeregisterGroupWithWorkspace removes group from group pool
 func DeregisterGroupWithWorkspace(ws *Workspace, name string) {
@@ -116,10 +120,12 @@ func DeregisterGroupWithWorkspace(ws *Workspace, name string) {
 	ws.mu.Unlock()
 }
 
+/*
 // DeregisterGroup removes group from group pool
 func DeregisterGroup(name string) {
 	DeregisterGroupWithWorkspace(DefaultWorkspace, name)
 }
+*/
 
 // If peers is nil, the peerPicker is called via a sync.Once to initialize it.
 func newGroup(ws *Workspace, name string, cacheBytes int64, getter Getter, peers PeerPicker) *Group {
@@ -158,11 +164,13 @@ func RegisterNewGroupHookWithWorkspace(ws *Workspace, fn func(*Group)) {
 	ws.newGroupHook = fn
 }
 
+/*
 // RegisterNewGroupHook registers a hook that is run each time
 // a group is created.
 func RegisterNewGroupHook(fn func(*Group)) {
 	RegisterNewGroupHookWithWorkspace(DefaultWorkspace, fn)
 }
+*/
 
 // RegisterServerStartWithWorkspace registers a hook that is run when the first
 // group is created.
@@ -173,11 +181,13 @@ func RegisterServerStartWithWorkspace(ws *Workspace, fn func()) {
 	ws.initPeerServer = fn
 }
 
+/*
 // RegisterServerStart registers a hook that is run when the first
 // group is created.
 func RegisterServerStart(fn func()) {
 	RegisterServerStartWithWorkspace(DefaultWorkspace, fn)
 }
+*/
 
 func callInitPeerServer(ws *Workspace) {
 	if ws.initPeerServer != nil {

@@ -95,7 +95,7 @@ func TestHTTPPool(t *testing.T) {
 	wg.Wait()
 
 	// Use a dummy self address so that we don't handle gets in-process.
-	p := NewHTTPPool("should-be-ignored")
+	p := NewHTTPPoolWithWorkspace(DefaultWorkspace, "should-be-ignored")
 	p.Set(addrToURL(childAddr)...)
 
 	// Dummy getter function. Gets should go to children only.
@@ -108,7 +108,7 @@ func TestHTTPPool(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	g := NewGroup("httpPoolTest", 1<<20, getter)
+	g := NewGroupWithWorkspace(DefaultWorkspace, "httpPoolTest", 1<<20, getter)
 
 	for _, key := range testKeys(nGets) {
 		var value string
@@ -219,7 +219,7 @@ func testKeys(n int) (keys []string) {
 func beChildForTestHTTPPool(t *testing.T) {
 	addrs := strings.Split(*peerAddrs, ",")
 
-	p := NewHTTPPool("http://" + addrs[*peerIndex])
+	p := NewHTTPPoolWithWorkspace(DefaultWorkspace, "http://"+addrs[*peerIndex])
 	p.Set(addrToURL(addrs)...)
 
 	getter := GetterFunc(func(ctx context.Context, key string, dest Sink) error {
@@ -242,7 +242,7 @@ func beChildForTestHTTPPool(t *testing.T) {
 		dest.SetString(strconv.Itoa(*peerIndex)+":"+key, time.Time{})
 		return nil
 	})
-	NewGroup("httpPoolTest", 1<<20, getter)
+	NewGroupWithWorkspace(DefaultWorkspace, "httpPoolTest", 1<<20, getter)
 
 	log.Fatal(http.ListenAndServe(addrs[*peerIndex], p))
 }

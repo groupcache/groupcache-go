@@ -17,7 +17,7 @@ import (
 
 var store = map[string]string{}
 
-var group = groupcache.NewGroup("cache1", 64<<20, groupcache.GetterFunc(
+var group = groupcache.NewGroupWithWorkspace(groupcache.DefaultWorkspace, "cache1", 64<<20, groupcache.GetterFunc(
 	func(ctx context.Context, key string, dest groupcache.Sink) error {
 		fmt.Printf("Get Called\n")
 		v, ok := store[key]
@@ -41,7 +41,7 @@ func main() {
 	flag.Parse()
 
 	p := strings.Split(*peers, ",")
-	pool := groupcache.NewHTTPPoolOpts(fmt.Sprintf("http://%s", *addr), &groupcache.HTTPPoolOptions{})
+	pool := groupcache.NewHTTPPoolOptsWithWorkspace(groupcache.DefaultWorkspace, fmt.Sprintf("http://%s", *addr), &groupcache.HTTPPoolOptions{})
 	pool.Set(p...)
 
 	http.HandleFunc("/set", func(w http.ResponseWriter, r *http.Request) {
