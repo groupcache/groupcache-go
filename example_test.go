@@ -6,10 +6,10 @@ import (
 	"log"
 	"time"
 
-	"github.com/mailgun/groupcache/v2"
+	"github.com/groupcache/groupcache-go/v2"
 )
 
-func ExampleUsage() {
+func Example() {
 	/*
 		// Keep track of peers in our cluster and add our instance to the pool `http://localhost:8080`
 		pool := groupcache.NewHTTPPoolOpts("http://localhost:8080", &groupcache.HTTPPoolOptions{})

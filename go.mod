@@ -1,6 +1,6 @@
-module github.com/mailgun/groupcache/v2
+module github.com/groupcache/groupcache-go/v2
 
-go 1.19
+go 1.21
 
 require (
 	github.com/golang/protobuf v1.5.2
