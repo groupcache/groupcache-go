@@ -27,6 +27,9 @@ package groupcache
 import (
 	"context"
 	"errors"
+	"github.com/groupcache/groupcache-go/v2/consistenthash"
+	"github.com/groupcache/groupcache-go/v2/discovery"
+	"log/slog"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -712,4 +715,32 @@ type CacheStats struct {
 	Gets      int64
 	Hits      int64
 	Evictions int64
+}
+
+// ------------------------------------
+// New Stuff
+// ------------------------------------
+
+// Config is the configuration for this instance of groupcache
+type Config struct {
+	HashFn        consistenthash.Hash
+	Logger        *slog.Logger
+	PeerDiscovery discovery.T
+	Transport     Transport
+	InstanceID    string
+	Replicas      int
+}
+
+// Instance of groupcache
+type Instance struct {
+}
+
+// New instantiates a new Instance of groupcache with the provided config
+func New(config Config) Instance {
+	return Instance{}
+}
+
+// NewGroup creates a new group associated with this instance of groupcache
+func (i *Instance) NewGroup(name string, cacheBytes int64, getter Getter) *Group {
+	return &Group{}
 }
