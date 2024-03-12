@@ -1,9 +1,12 @@
+//go:build tag_name
+
 package main
 
 import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/groupcache/groupcache-go/v2/data"
 	"log"
 	"net/http"
 	"os"
@@ -18,7 +21,7 @@ import (
 var store = map[string]string{}
 
 var group = groupcache.NewGroup("cache1", 64<<20, groupcache.GetterFunc(
-	func(ctx context.Context, key string, dest groupcache.Sink) error {
+	func(ctx context.Context, key string, dest data.Sink) error {
 		fmt.Printf("Get Called\n")
 		v, ok := store[key]
 		if !ok {
@@ -61,7 +64,7 @@ func main() {
 		defer cancel()
 
 		var b []byte
-		err := group.Get(ctx, key, groupcache.AllocatingByteSliceSink(&b))
+		err := group.Get(ctx, key, data.AllocatingByteSliceSink(&b))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return

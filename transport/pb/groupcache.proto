@@ -16,7 +16,8 @@ limitations under the License.
 
 syntax = "proto2";
 
-package groupcachepb;
+package pb;
+option go_package = "github.com/groupcache/groupcache-go/pb";
 
 message GetRequest {
   required string group = 1;

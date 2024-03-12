@@ -1,4 +1,8 @@
-package groupcache
+package transport
+
+import (
+	"errors"
+)
 
 // ErrNotFound should be returned from an implementation of `GetterFunc` to indicate the
 // requested value is not available. When remote HTTP calls are made to retrieve values from
@@ -13,7 +17,8 @@ func (e *ErrNotFound) Error() string {
 }
 
 func (e *ErrNotFound) Is(target error) bool {
-	_, ok := target.(*ErrNotFound)
+	var errNotFound *ErrNotFound
+	ok := errors.As(target, &errNotFound)
 	return ok
 }
 
@@ -28,6 +33,7 @@ func (e *ErrRemoteCall) Error() string {
 }
 
 func (e *ErrRemoteCall) Is(target error) bool {
-	_, ok := target.(*ErrRemoteCall)
+	var errRemoteCall *ErrRemoteCall
+	ok := errors.As(target, &errRemoteCall)
 	return ok
 }

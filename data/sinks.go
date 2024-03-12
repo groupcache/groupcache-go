@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package groupcache
+package data
 
 import (
 	"errors"
@@ -49,8 +49,8 @@ type Sink interface {
 	// The caller retains ownership of m.
 	SetProto(m proto.Message, e time.Time) error
 
-	// view returns a frozen view of the bytes for caching.
-	view() (ByteView, error)
+	// View returns a frozen view of the bytes for caching.
+	View() (ByteView, error)
 }
 
 func cloneBytes(b []byte) []byte {
@@ -59,7 +59,7 @@ func cloneBytes(b []byte) []byte {
 	return c
 }
 
-func setSinkView(s Sink, v ByteView) error {
+func SetSinkView(s Sink, v ByteView) error {
 	// A viewSetter is a Sink that can also receive its value from
 	// a ByteView. This is a fast path to minimize copies when the
 	// item was already cached locally in memory (where it's
@@ -84,11 +84,9 @@ func StringSink(sp *string) Sink {
 type stringSink struct {
 	sp *string
 	v  ByteView
-	// TODO(bradfitz): track whether any Sets were called.
 }
 
-func (s *stringSink) view() (ByteView, error) {
-	// TODO(bradfitz): return an error if no Set was called
+func (s *stringSink) View() (ByteView, error) {
 	return s.v, nil
 }
 
@@ -141,7 +139,7 @@ func (s *byteViewSink) setView(v ByteView) error {
 	return nil
 }
 
-func (s *byteViewSink) view() (ByteView, error) {
+func (s *byteViewSink) View() (ByteView, error) {
 	return *s.dst, nil
 }
 
@@ -178,7 +176,7 @@ type protoSink struct {
 	v ByteView // encoded
 }
 
-func (s *protoSink) view() (ByteView, error) {
+func (s *protoSink) View() (ByteView, error) {
 	return s.v, nil
 }
 
@@ -236,7 +234,7 @@ type allocBytesSink struct {
 	v   ByteView
 }
 
-func (s *allocBytesSink) view() (ByteView, error) {
+func (s *allocBytesSink) View() (ByteView, error) {
 	return s.v, nil
 }
 
@@ -297,7 +295,7 @@ type truncBytesSink struct {
 	v   ByteView
 }
 
-func (s *truncBytesSink) view() (ByteView, error) {
+func (s *truncBytesSink) View() (ByteView, error) {
 	return s.v, nil
 }
 

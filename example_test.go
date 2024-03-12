@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/groupcache/groupcache-go/v2"
-	"github.com/groupcache/groupcache-go/v2/daemon"
-	"github.com/groupcache/groupcache-go/v2/discovery"
+	"github.com/groupcache/groupcache-go/v2/cluster"
+	"github.com/groupcache/groupcache-go/v2/data"
+	"github.com/groupcache/groupcache-go/v2/transport"
+	"github.com/groupcache/groupcache-go/v2/transport/peer"
 	"github.com/segmentio/fasthash/fnv1"
 )
 
@@ -19,18 +21,13 @@ import (
 func ExampleNew() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 
-	// Starts an HTTP listener with HTTP as the transport
-	d, err := daemon.Spawn(ctx, daemon.Config{
-		ListenAddress: "192.168.1.1:8080",
-		Config: groupcache.Config{
-			// These are Optional, with reasonable defaults
-			PeerDiscovery: discovery.NewK8s(),
-			Transport:     nil, // daemon.Spawn() ignores this if set.
-			HashFn:        fnv1.HashBytes64,
-			InstanceID:    "instance-01",
-			Logger:        slog.Default(),
-			Replicas:      50,
-		},
+	// Starts an instance of groupcache with the provided transport
+	d, err := cluster.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{
+		// If transport is nil, defaults to HttpTransport
+		Transport: nil,
+		HashFn:    fnv1.HashBytes64,
+		Logger:    slog.Default(),
+		Replicas:  50,
 	})
 	cancel()
 	if err != nil {
@@ -38,43 +35,27 @@ func ExampleNew() {
 	}
 
 	// Create a new group cache with a max cache size of 3MB
-	group := d.NewGroup("users", 3000000, groupcache.GetterFunc(
-		func(ctx context.Context, id string, dest groupcache.Sink) error {
-
-			// In a real scenario we might fetch the value from a database.
-			/*if user, err := fetchUserFromMongo(ctx, id); err != nil {
-				return err
-			}*/
-
-			user := User{
-				Id:      "12345",
-				Name:    "John Doe",
-				Age:     40,
-				IsSuper: true,
-			}
-
+	group, err := d.GroupCache.NewGroup("users", 3000000, groupcache.GetterFunc(
+		func(ctx context.Context, id string, dest data.Sink) error {
 			// Set the user in the groupcache to expire after 5 minutes
-			if err := dest.SetProto(&user, time.Now().Add(time.Minute*5)); err != nil {
+			if err := dest.SetString("hello", time.Now().Add(time.Minute*5)); err != nil {
 				return err
 			}
 			return nil
 		},
 	))
-
-	var user User
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	if err := group.Get(ctx, "12345", groupcache.ProtoSink(&user)); err != nil {
+	var value string
+	if err := group.Get(ctx, "12345", data.StringSink(&value)); err != nil {
 		log.Fatal(err)
 	}
-
-	fmt.Printf("-- User --\n")
-	fmt.Printf("Id: %s\n", user.Id)
-	fmt.Printf("Name: %s\n", user.Name)
-	fmt.Printf("Age: %d\n", user.Age)
-	fmt.Printf("IsSuper: %t\n", user.IsSuper)
+	fmt.Printf("Value: %s\n", value)
 
 	// Remove the key from the groupcache
 	if err := group.Remove(ctx, "12345"); err != nil {
@@ -97,17 +78,31 @@ func ExampleNewHttpTransport() {
 	})
 
 	// Explicitly instantiate and use the HTTP transport
-	transport := groupcache.NewHttpTransport(
-		groupcache.HttpTransportConfig{
+	transport := transport.NewHttpTransport(
+		transport.HttpTransportOptions{
+			// BasePath specifies the HTTP path that will serve groupcache requests.
+			// If blank, it defaults to "/_groupcache/".
 			BasePath: "/_groupcache/",
-			// Optional
-			HTTPTransport: nil,
-			HTTPContext:   nil,
+			// Context optionally specifies a context for the server to use when it
+			// receives a request.
+			Context: nil,
+			// Client optionally provide a custom http client with TLS config
+			Client: nil,
+			// Scheme is is either `http` or `https` defaults to `http`
+			Scheme: "",
 		},
 	)
 
-	// Use a static peer list instead of dynamic peer discovery
-	static := discovery.NewStatic([]discovery.Peer{
+	// Create a new groupcache instance
+	instance := groupcache.New(groupcache.Options{
+		HashFn:    fnv1.HashBytes64,
+		Logger:    slog.Default(),
+		Transport: transport,
+		Replicas:  50,
+	})
+
+	// You can set the peers manually
+	instance.SetPeers(context.Background(), []peer.Info{
 		{
 			Address: "192.168.1.1:8080",
 			IsSelf:  true,
@@ -121,16 +116,11 @@ func ExampleNewHttpTransport() {
 			IsSelf:  false,
 		},
 	})
-
-	// Create a new groupcache instance
-	instance := groupcache.New(groupcache.Config{
-		PeerDiscovery: static,
-		HashFn:        fnv1.HashBytes64,
-		InstanceID:    "instance-01",
-		Logger:        slog.Default(),
-		Transport:     transport,
-		Replicas:      50,
-	})
+	// OR you can register a peer discovery mechanism
+	//d := discovery.SpawnK8s(discovery.K8sConfig{
+	//	OnUpdate: instance.SetPeers,
+	//})
+	//defer d.Shutdown(context.Background())
 
 	// Add the groupcache handler
 	mux.Handle("/_groupcache/", transport)
@@ -150,7 +140,7 @@ func ExampleNewHttpTransport() {
 	defer server.Shutdown(context.Background())
 
 	// Update the static peer config while groupcache is running
-	static.SetPeers([]discovery.Peer{
+	instance.SetPeers(context.Background(), []peer.Info{
 		{
 			Address: "192.168.1.1:8080",
 			IsSelf:  true,
@@ -162,43 +152,27 @@ func ExampleNewHttpTransport() {
 	})
 
 	// Create a new group cache with a max cache size of 3MB
-	group := instance.NewGroup("users", 3000000, groupcache.GetterFunc(
-		func(ctx context.Context, id string, dest groupcache.Sink) error {
-
-			// In a real scenario we might fetch the value from a database.
-			/*if user, err := fetchUserFromMongo(ctx, id); err != nil {
-				return err
-			}*/
-
-			user := User{
-				Id:      "12345",
-				Name:    "John Doe",
-				Age:     40,
-				IsSuper: true,
-			}
-
+	group, err := instance.NewGroup("users", 3000000, groupcache.GetterFunc(
+		func(ctx context.Context, id string, dest data.Sink) error {
 			// Set the user in the groupcache to expire after 5 minutes
-			if err := dest.SetProto(&user, time.Now().Add(time.Minute*5)); err != nil {
+			if err := dest.SetString("hello", time.Now().Add(time.Minute*5)); err != nil {
 				return err
 			}
 			return nil
 		},
 	))
-
-	var user User
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	if err := group.Get(ctx, "12345", groupcache.ProtoSink(&user)); err != nil {
+	var value string
+	if err := group.Get(ctx, "12345", data.StringSink(&value)); err != nil {
 		log.Fatal(err)
 	}
-
-	fmt.Printf("-- User --\n")
-	fmt.Printf("Id: %s\n", user.Id)
-	fmt.Printf("Name: %s\n", user.Name)
-	fmt.Printf("Age: %d\n", user.Age)
-	fmt.Printf("IsSuper: %t\n", user.IsSuper)
+	fmt.Printf("Value: %s\n", value)
 
 	// Remove the key from the groupcache
 	if err := group.Remove(ctx, "12345"); err != nil {
