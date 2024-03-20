@@ -23,7 +23,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/groupcache/groupcache-go/v2/data"
+	"github.com/groupcache/groupcache-go/v3/data"
 )
 
 func TestByteView(t *testing.T) {

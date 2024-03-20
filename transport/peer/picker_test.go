@@ -19,7 +19,7 @@ package peer_test
 
 import (
 	"fmt"
-	"github.com/groupcache/groupcache-go/v2/transport/peer"
+	"github.com/groupcache/groupcache-go/v3/transport/peer"
 	"github.com/segmentio/fasthash/fnv1"
 	"github.com/stretchr/testify/assert"
 	"math/rand"

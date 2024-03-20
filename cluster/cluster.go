@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/groupcache/groupcache-go/v2"
-	"github.com/groupcache/groupcache-go/v2/transport"
-	"github.com/groupcache/groupcache-go/v2/transport/peer"
+	"github.com/groupcache/groupcache-go/v3"
+	"github.com/groupcache/groupcache-go/v3/transport"
+	"github.com/groupcache/groupcache-go/v3/transport/peer"
 )
 
 var _daemons []*Daemon

@@ -1,4 +1,4 @@
-module github.com/groupcache/groupcache-go/v2
+module github.com/groupcache/groupcache-go/v3
 
 go 1.21
 

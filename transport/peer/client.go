@@ -2,7 +2,7 @@ package peer
 
 import (
 	"context"
-	"github.com/groupcache/groupcache-go/v2/transport/pb"
+	"github.com/groupcache/groupcache-go/v3/transport/pb"
 )
 
 // Client is the interface that must be implemented by a peer.

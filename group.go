@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v2/data"
-	"github.com/groupcache/groupcache-go/v2/internal/singleflight"
-	"github.com/groupcache/groupcache-go/v2/transport"
-	"github.com/groupcache/groupcache-go/v2/transport/pb"
-	"github.com/groupcache/groupcache-go/v2/transport/peer"
+	"github.com/groupcache/groupcache-go/v3/data"
+	"github.com/groupcache/groupcache-go/v3/internal/singleflight"
+	"github.com/groupcache/groupcache-go/v3/transport"
+	"github.com/groupcache/groupcache-go/v3/transport/pb"
+	"github.com/groupcache/groupcache-go/v3/transport/peer"
 )
 
 // A Getter loads data for a key.

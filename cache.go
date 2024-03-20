@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v2/data"
-	"github.com/groupcache/groupcache-go/v2/internal/lru"
+	"github.com/groupcache/groupcache-go/v3/data"
+	"github.com/groupcache/groupcache-go/v3/internal/lru"
 )
 
 // nowFunc returns the current time which is used by the LRU to

@@ -32,9 +32,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v2/data"
-	"github.com/groupcache/groupcache-go/v2/transport/pb"
-	"github.com/groupcache/groupcache-go/v2/transport/peer"
+	"github.com/groupcache/groupcache-go/v3/data"
+	"github.com/groupcache/groupcache-go/v3/transport/pb"
+	"github.com/groupcache/groupcache-go/v3/transport/peer"
 	"golang.org/x/net/proxy"
 	"google.golang.org/protobuf/proto"
 )

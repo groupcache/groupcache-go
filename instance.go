@@ -31,10 +31,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/groupcache/groupcache-go/v2/data"
-	"github.com/groupcache/groupcache-go/v2/internal/singleflight"
-	"github.com/groupcache/groupcache-go/v2/transport"
-	"github.com/groupcache/groupcache-go/v2/transport/peer"
+	"github.com/groupcache/groupcache-go/v3/data"
+	"github.com/groupcache/groupcache-go/v3/internal/singleflight"
+	"github.com/groupcache/groupcache-go/v3/transport"
+	"github.com/groupcache/groupcache-go/v3/transport/peer"
 )
 
 type Logger interface {

@@ -3,7 +3,7 @@
 groupcache is a caching and cache-filling library, intended as a
 replacement for memcached in many cases.
 
-For API docs and examples, see http://godoc.org/github.com/groupcache/groupcache-go/v2
+For API docs and examples, see http://godoc.org/github.com/groupcache/groupcache-go/v3
    
 ### Modifications from original library
 * Support for explicit key removal from a group. `Remove()` requests are 
@@ -82,9 +82,9 @@ import (
     "time"
     "log/slog"
 
-    "github.com/groupcache/groupcache-go/v2"
-    "github.com/groupcache/groupcache-go/v2/cluster"
-    "github.com/groupcache/groupcache-go/v2/data"
+    "github.com/groupcache/groupcache-go/v3"
+    "github.com/groupcache/groupcache-go/v3/cluster"
+    "github.com/groupcache/groupcache-go/v3/data"
     "github.com/segmentio/fasthash/fnv1"
 )
 

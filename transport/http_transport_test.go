@@ -28,12 +28,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v2"
-	"github.com/groupcache/groupcache-go/v2/cluster"
-	"github.com/groupcache/groupcache-go/v2/data"
-	"github.com/groupcache/groupcache-go/v2/transport"
-	"github.com/groupcache/groupcache-go/v2/transport/pb"
-	"github.com/groupcache/groupcache-go/v2/transport/peer"
+	"github.com/groupcache/groupcache-go/v3"
+	"github.com/groupcache/groupcache-go/v3/cluster"
+	"github.com/groupcache/groupcache-go/v3/data"
+	"github.com/groupcache/groupcache-go/v3/transport"
+	"github.com/groupcache/groupcache-go/v3/transport/pb"
+	"github.com/groupcache/groupcache-go/v3/transport/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

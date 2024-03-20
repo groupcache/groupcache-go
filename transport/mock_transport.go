@@ -6,9 +6,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/groupcache/groupcache-go/v2/data"
-	"github.com/groupcache/groupcache-go/v2/transport/pb"
-	"github.com/groupcache/groupcache-go/v2/transport/peer"
+	"github.com/groupcache/groupcache-go/v3/data"
+	"github.com/groupcache/groupcache-go/v3/transport/pb"
+	"github.com/groupcache/groupcache-go/v3/transport/peer"
 )
 
 // MockTransport is intended to be used as a singleton. Pass a new instance of this singleton into groupcache.New()

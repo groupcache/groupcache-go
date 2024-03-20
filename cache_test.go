@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v2/data"
+	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/stretchr/testify/assert"
 )
 

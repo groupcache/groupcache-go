@@ -3,16 +3,16 @@ package groupcache_test
 import (
 	"context"
 	"fmt"
+	"github.com/groupcache/groupcache-go/v3"
 	"log"
 	"log/slog"
 	"net/http"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v2"
-	"github.com/groupcache/groupcache-go/v2/cluster"
-	"github.com/groupcache/groupcache-go/v2/data"
-	"github.com/groupcache/groupcache-go/v2/transport"
-	"github.com/groupcache/groupcache-go/v2/transport/peer"
+	"github.com/groupcache/groupcache-go/v3/cluster"
+	"github.com/groupcache/groupcache-go/v3/data"
+	"github.com/groupcache/groupcache-go/v3/transport"
+	"github.com/groupcache/groupcache-go/v3/transport/peer"
 	"github.com/segmentio/fasthash/fnv1"
 )
 

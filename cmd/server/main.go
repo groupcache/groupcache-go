@@ -6,7 +6,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/groupcache/groupcache-go/v2/data"
+	"github.com/groupcache/groupcache-go/v3/data"
 	"log"
 	"net/http"
 	"os"
@@ -14,8 +14,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/groupcache/groupcache-go/v2"
 )
 
 var store = map[string]string{}
