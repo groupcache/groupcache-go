@@ -29,13 +29,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/groupcache/groupcache-go/v2"
 	"github.com/groupcache/groupcache-go/v2/cluster"
 	"github.com/groupcache/groupcache-go/v2/data"
 	"github.com/groupcache/groupcache-go/v2/transport"
 	"github.com/groupcache/groupcache-go/v2/transport/pb/testpb"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 type TestGroup interface {
@@ -171,8 +171,8 @@ func TestGetDupSuppressProto(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		select {
 		case v := <-resc:
-			if proto.CompactTextString(v) != proto.CompactTextString(want) {
-				t.Errorf(" Got: %v\nWant: %v", proto.CompactTextString(v), proto.CompactTextString(want))
+			if !proto.Equal(v, want) {
+				t.Errorf(" Got: %v\nWant: %v", v.String(), want.String())
 			}
 		case <-time.After(5 * time.Second):
 			t.Errorf("timeout waiting on getter #%d of 2", i+1)
@@ -249,7 +249,8 @@ func TestCacheEviction(t *testing.T) {
 	for bytesFlooded < cacheSize+1024 {
 		var res string
 		key := fmt.Sprintf("dummy-key-%d", bytesFlooded)
-		stringGroup.Get(dummyCtx, key, data.StringSink(&res))
+		err := stringGroup.Get(dummyCtx, key, data.StringSink(&res))
+		require.NoError(t, err)
 		bytesFlooded += int64(len(key) + len(res))
 	}
 	evicts := stringGroup.CacheStats(groupcache.MainCache).Evictions - evict0
@@ -273,7 +274,7 @@ func TestPeers(t *testing.T) {
 		Transport: mockTransport,
 	})
 	require.NoError(t, err)
-	defer cluster.Shutdown(context.Background())
+	defer func() { _ = cluster.Shutdown(context.Background()) }()
 
 	var localHits, totalHits int
 	newGetter := func(idx int) groupcache.Getter {

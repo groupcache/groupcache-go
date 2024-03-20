@@ -91,12 +91,6 @@ func (c *cache) bytes() int64 {
 	return c.nbytes
 }
 
-func (c *cache) items() int64 {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.itemsLocked()
-}
-
 func (c *cache) itemsLocked() int64 {
 	if c.lru == nil {
 		return 0

@@ -59,6 +59,7 @@ func TestStartMultipleDaemons(t *testing.T) {
 	assert.Contains(t, cluster.DaemonAt(0).ListenAddress(), ":1111")
 	assert.Contains(t, cluster.DaemonAt(1).ListenAddress(), ":2222")
 	err = cluster.Shutdown(context.Background())
+	require.NoError(t, err)
 }
 
 func TestStartWithInvalidPeer(t *testing.T) {

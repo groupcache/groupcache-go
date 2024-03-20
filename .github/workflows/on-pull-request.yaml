@@ -21,10 +21,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v3
 
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go-version }}
 
@@ -38,8 +38,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: go mod tidy
+        run: go mod tidy && git diff --exit-code
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.56.2
+          skip-cache: true
+          args: -v
+
       - name: Install deps
         run: go mod download
 
       - name: Test
         run: go test ./...
+

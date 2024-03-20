@@ -19,15 +19,13 @@ package peer_test
 
 import (
 	"fmt"
+	"github.com/groupcache/groupcache-go/v2/transport/peer"
+	"github.com/segmentio/fasthash/fnv1"
+	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"net"
 	"slices"
 	"testing"
-	"time"
-
-	"github.com/groupcache/groupcache-go/v2/transport/peer"
-	"github.com/segmentio/fasthash/fnv1"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestHashing(t *testing.T) {
@@ -95,7 +93,6 @@ func TestConsistency(t *testing.T) {
 
 func TestDistribution(t *testing.T) {
 	hosts := []string{"a.svc.local", "b.svc.local", "c.svc.local"}
-	rand.Seed(time.Now().Unix())
 	const cases = 10000
 
 	strings := make([]string, cases)

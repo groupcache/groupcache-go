@@ -154,7 +154,7 @@ func (s *peerStats) Report() string {
 	var b strings.Builder
 
 	var sorted []string
-	for k, _ := range s.stats {
+	for k := range s.stats {
 		sorted = append(sorted, k)
 	}
 

@@ -32,11 +32,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/groupcache/groupcache-go/v2/data"
 	"github.com/groupcache/groupcache-go/v2/transport/pb"
 	"github.com/groupcache/groupcache-go/v2/transport/peer"
 	"golang.org/x/net/proxy"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -309,7 +309,7 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-protobuf")
-	w.Write(body)
+	_, _ = w.Write(body)
 }
 
 // NewClient creates a new http client for the provided peer

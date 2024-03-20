@@ -64,7 +64,7 @@ func ExampleNew() {
 	}
 
 	// Shutdown the daemon
-	d.Shutdown(context.Background())
+	_ = d.Shutdown(context.Background())
 }
 
 // ExampleNewHttpTransport demonstrates how to use groupcache in a service that
@@ -102,7 +102,7 @@ func ExampleNewHttpTransport() {
 	})
 
 	// You can set the peers manually
-	instance.SetPeers(context.Background(), []peer.Info{
+	err := instance.SetPeers(context.Background(), []peer.Info{
 		{
 			Address: "192.168.1.1:8080",
 			IsSelf:  true,
@@ -116,6 +116,9 @@ func ExampleNewHttpTransport() {
 			IsSelf:  false,
 		},
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 	// OR you can register a peer discovery mechanism
 	//d := discovery.SpawnK8s(discovery.K8sConfig{
 	//	OnUpdate: instance.SetPeers,
@@ -137,10 +140,10 @@ func ExampleNewHttpTransport() {
 			log.Fatal(err)
 		}
 	}()
-	defer server.Shutdown(context.Background())
+	defer func() { _ = server.Shutdown(context.Background()) }()
 
 	// Update the static peer config while groupcache is running
-	instance.SetPeers(context.Background(), []peer.Info{
+	err = instance.SetPeers(context.Background(), []peer.Info{
 		{
 			Address: "192.168.1.1:8080",
 			IsSelf:  true,
@@ -150,6 +153,9 @@ func ExampleNewHttpTransport() {
 			IsSelf:  false,
 		},
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Create a new group cache with a max cache size of 3MB
 	group, err := instance.NewGroup("users", 3000000, groupcache.GetterFunc(

@@ -20,7 +20,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 var _ Sink = &stringSink{}
@@ -171,7 +171,6 @@ func ProtoSink(m proto.Message) Sink {
 
 type protoSink struct {
 	dst proto.Message // authoritative value
-	typ string
 
 	v ByteView // encoded
 }
