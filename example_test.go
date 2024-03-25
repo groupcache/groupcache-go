@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/groupcache/groupcache-go/v3"
-	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
 	"github.com/segmentio/fasthash/fnv1"
@@ -52,7 +51,7 @@ func ExampleNew() {
 
 	// Create a new group cache with a max cache size of 3MB
 	group, err := d.NewGroup("users", 3000000, groupcache.GetterFunc(
-		func(ctx context.Context, id string, dest data.Sink) error {
+		func(ctx context.Context, id string, dest transport.Sink) error {
 			// Set the user in the groupcache to expire after 5 minutes
 			if err := dest.SetString("hello", time.Now().Add(time.Minute*5)); err != nil {
 				return err
@@ -68,7 +67,7 @@ func ExampleNew() {
 	defer cancel()
 
 	var value string
-	if err := group.Get(ctx, "12345", data.StringSink(&value)); err != nil {
+	if err := group.Get(ctx, "12345", transport.StringSink(&value)); err != nil {
 		log.Fatal(err)
 	}
 	fmt.Printf("Value: %s\n", value)
@@ -175,7 +174,7 @@ func ExampleNewHttpTransport() {
 
 	// Create a new group cache with a max cache size of 3MB
 	group, err := instance.NewGroup("users", 3000000, groupcache.GetterFunc(
-		func(ctx context.Context, id string, dest data.Sink) error {
+		func(ctx context.Context, id string, dest transport.Sink) error {
 			// Set the user in the groupcache to expire after 5 minutes
 			if err := dest.SetString("hello", time.Now().Add(time.Minute*5)); err != nil {
 				return err
@@ -191,7 +190,7 @@ func ExampleNewHttpTransport() {
 	defer cancel()
 
 	var value string
-	if err := group.Get(ctx, "12345", data.StringSink(&value)); err != nil {
+	if err := group.Get(ctx, "12345", transport.StringSink(&value)); err != nil {
 		log.Fatal(err)
 	}
 	fmt.Printf("Value: %s\n", value)

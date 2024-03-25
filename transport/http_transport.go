@@ -32,7 +32,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/groupcache/groupcache-go/v3/transport/pb"
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
 	"golang.org/x/net/proxy"
@@ -49,18 +48,12 @@ var bufferPool = sync.Pool{
 }
 
 type GroupCacheInstance interface {
-	GetGroup(string) data.Group
+	GetGroup(string) Group
 }
 
 type Logger interface {
 	Info(msg string, args ...any)
 	Error(msg string, args ...any)
-}
-
-type Group interface {
-	Get(ctx context.Context, key string, dest data.Sink) error
-	LocalSet(string, []byte, time.Time)
-	LocalRemove(string)
 }
 
 type Transport interface {
@@ -232,8 +225,14 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	groupName := parts[0]
 	key := parts[1]
 
+	type transportMethods interface {
+		Get(ctx context.Context, key string, dest Sink) error
+		LocalSet(string, []byte, time.Time)
+		LocalRemove(string)
+	}
+
 	// Fetch the value for this group/key.
-	group := t.instance.GetGroup(groupName).(Group)
+	group := t.instance.GetGroup(groupName).(transportMethods)
 	if group == nil {
 		http.Error(w, "no such group: "+groupName, http.StatusNotFound)
 		return
@@ -281,7 +280,7 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var b []byte
 
-	value := data.AllocatingByteSliceSink(&b)
+	value := AllocatingByteSliceSink(&b)
 	err := group.Get(ctx, key, value)
 	if err != nil {
 		if errors.Is(err, &ErrNotFound{}) {

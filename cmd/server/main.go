@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/groupcache/groupcache-go/v3"
-	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
 )
@@ -67,7 +66,7 @@ func main() {
 	}
 
 	group, err := i.NewGroup("cache1", 64<<20, groupcache.GetterFunc(
-		func(ctx context.Context, key string, dest data.Sink) error {
+		func(ctx context.Context, key string, dest transport.Sink) error {
 			v, ok := store[key]
 			if !ok {
 				return fmt.Errorf("key not set")
@@ -103,7 +102,7 @@ func main() {
 		defer cancel()
 
 		var b []byte
-		err := group.Get(ctx, key, data.AllocatingByteSliceSink(&b))
+		err := group.Get(ctx, key, transport.AllocatingByteSliceSink(&b))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return

@@ -20,7 +20,6 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
 )
@@ -56,12 +55,12 @@ func (d *Daemon) Start(ctx context.Context) error {
 }
 
 // NewGroup is a convenience method which calls NewGroup on the instance associated with this daemon.
-func (d *Daemon) NewGroup(name string, cacheBytes int64, getter Getter) (data.Group, error) {
+func (d *Daemon) NewGroup(name string, cacheBytes int64, getter Getter) (transport.Group, error) {
 	return d.instance.NewGroup(name, cacheBytes, getter)
 }
 
 // GetGroup is a convenience method which calls GetGroup on the instance associated with this daemon
-func (d *Daemon) GetGroup(name string) data.Group {
+func (d *Daemon) GetGroup(name string) transport.Group {
 	return d.instance.GetGroup(name)
 }
 

@@ -18,10 +18,10 @@ limitations under the License.
 package groupcache
 
 import (
+	"github.com/groupcache/groupcache-go/v3/transport"
 	"sync"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/groupcache/groupcache-go/v3/internal/lru"
 )
 
@@ -53,14 +53,14 @@ func (c *cache) stats() CacheStats {
 	}
 }
 
-func (c *cache) add(key string, value data.ByteView) {
+func (c *cache) add(key string, value transport.ByteView) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.lru == nil {
 		c.lru = &lru.Cache{
 			Now: nowFunc,
 			OnEvicted: func(key lru.Key, value interface{}) {
-				val := value.(data.ByteView)
+				val := value.(transport.ByteView)
 				c.nbytes -= int64(len(key.(string))) + int64(val.Len())
 				c.nevict++
 			},
@@ -70,7 +70,7 @@ func (c *cache) add(key string, value data.ByteView) {
 	c.nbytes += int64(len(key)) + int64(value.Len())
 }
 
-func (c *cache) get(key string) (value data.ByteView, ok bool) {
+func (c *cache) get(key string) (value transport.ByteView, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.nget++
@@ -82,7 +82,7 @@ func (c *cache) get(key string) (value data.ByteView, ok bool) {
 		return
 	}
 	c.nhit++
-	return vi.(data.ByteView), true
+	return vi.(transport.ByteView), true
 }
 
 func (c *cache) remove(key string) {

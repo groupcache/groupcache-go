@@ -30,7 +30,6 @@ import (
 
 	"github.com/groupcache/groupcache-go/v3"
 	"github.com/groupcache/groupcache-go/v3/cluster"
-	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/pb"
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
@@ -60,7 +59,7 @@ func TestHttpTransport(t *testing.T) {
 	}))
 
 	newGetter := func(idx int) groupcache.Getter {
-		return groupcache.GetterFunc(func(ctx context.Context, key string, dest data.Sink) error {
+		return groupcache.GetterFunc(func(ctx context.Context, key string, dest transport.Sink) error {
 			if _, err := http.Get(ts.URL); err != nil {
 				t.Logf("HTTP request from getter failed with '%s'", err)
 			}

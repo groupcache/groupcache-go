@@ -31,7 +31,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/groupcache/groupcache-go/v3/internal/singleflight"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
@@ -149,7 +148,7 @@ func (i *Instance) getAllPeers() []peer.Client {
 // completes.
 //
 // The group name must be unique for each getter.
-func (i *Instance) NewGroup(name string, cacheBytes int64, getter Getter) (data.Group, error) {
+func (i *Instance) NewGroup(name string, cacheBytes int64, getter Getter) (Group, error) {
 	if getter == nil {
 		return nil, errors.New("NewGroup(): provided Getter cannot be nil")
 	}
@@ -174,7 +173,7 @@ func (i *Instance) NewGroup(name string, cacheBytes int64, getter Getter) (data.
 
 // GetGroup returns the named group previously created with NewGroup, or
 // nil if there's no such group.
-func (i *Instance) GetGroup(name string) data.Group {
+func (i *Instance) GetGroup(name string) transport.Group {
 	i.mu.RLock()
 	g := i.groups[name]
 	i.mu.RUnlock()

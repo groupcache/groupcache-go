@@ -14,14 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package data
+package transport
 
 import (
 	"context"
 	"time"
 )
-
-// TODO: Attempt to move this into `transport` package and Sink back into `groupcache` package
 
 type Group interface {
 	Set(context.Context, string, []byte, time.Time, bool) error

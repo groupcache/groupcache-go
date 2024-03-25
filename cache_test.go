@@ -18,10 +18,10 @@ limitations under the License.
 package groupcache
 
 import (
+	"github.com/groupcache/groupcache-go/v3/transport"
 	"testing"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,7 +29,7 @@ func TestEnsureSizeReportedCorrectly(t *testing.T) {
 	c := &cache{}
 
 	// Add the first value
-	bv1 := data.ByteViewWithExpire([]byte("first"), time.Now().Add(100*time.Second))
+	bv1 := transport.ByteViewWithExpire([]byte("first"), time.Now().Add(100*time.Second))
 	c.add("key1", bv1)
 	v, ok := c.get("key1")
 
@@ -39,7 +39,7 @@ func TestEnsureSizeReportedCorrectly(t *testing.T) {
 	assert.Equal(t, int64(9), c.bytes())
 
 	// Add a second value
-	bv2 := data.ByteViewWithExpire([]byte("second"), time.Now().Add(200*time.Second))
+	bv2 := transport.ByteViewWithExpire([]byte("second"), time.Now().Add(200*time.Second))
 
 	c.add("key2", bv2)
 	v, ok = c.get("key2")
@@ -50,7 +50,7 @@ func TestEnsureSizeReportedCorrectly(t *testing.T) {
 	assert.Equal(t, int64(19), c.bytes())
 
 	// Replace the first value with a shorter value
-	bv3 := data.ByteViewWithExpire([]byte("3"), time.Now().Add(200*time.Second))
+	bv3 := transport.ByteViewWithExpire([]byte("3"), time.Now().Add(200*time.Second))
 
 	c.add("key1", bv3)
 	v, ok = c.get("key1")
@@ -62,7 +62,7 @@ func TestEnsureSizeReportedCorrectly(t *testing.T) {
 	assert.Equal(t, int64(15), c.bytes())
 
 	// Replace the second value with a longer value
-	bv4 := data.ByteViewWithExpire([]byte("this-string-is-28-chars-long"), time.Now().Add(200*time.Second))
+	bv4 := transport.ByteViewWithExpire([]byte("this-string-is-28-chars-long"), time.Now().Add(200*time.Second))
 
 	c.add("key2", bv4)
 	v, ok = c.get("key2")
@@ -87,7 +87,7 @@ func TestEnsureUpdateExpiredValue(t *testing.T) {
 	}()
 
 	// Expires in 1 second
-	c.add("key1", data.ByteViewWithExpire([]byte("value1"), curTime.Add(time.Second)))
+	c.add("key1", transport.ByteViewWithExpire([]byte("value1"), curTime.Add(time.Second)))
 	_, ok := c.get("key1")
 	assert.True(t, ok)
 
@@ -99,7 +99,7 @@ func TestEnsureUpdateExpiredValue(t *testing.T) {
 	assert.False(t, ok)
 
 	// Add a new key that expires in 1 second
-	c.add("key2", data.ByteViewWithExpire([]byte("value2"), curTime.Add(time.Second)))
+	c.add("key2", transport.ByteViewWithExpire([]byte("value2"), curTime.Add(time.Second)))
 	_, ok = c.get("key2")
 	assert.True(t, ok)
 
@@ -111,7 +111,7 @@ func TestEnsureUpdateExpiredValue(t *testing.T) {
 	assert.True(t, ok)
 
 	// Replace the existing key, this should update the expired time
-	c.add("key2", data.ByteViewWithExpire([]byte("updated value2"), curTime.Add(time.Second)))
+	c.add("key2", transport.ByteViewWithExpire([]byte("updated value2"), curTime.Add(time.Second)))
 	_, ok = c.get("key2")
 	assert.True(t, ok)
 

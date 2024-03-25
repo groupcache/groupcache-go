@@ -22,7 +22,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/groupcache/groupcache-go/v3/transport/pb"
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
 )
@@ -125,7 +124,7 @@ func (c *MockClient) Get(ctx context.Context, in *pb.GetRequest, out *pb.GetResp
 	c.addCall("Get", 1)
 
 	var b []byte
-	value := data.AllocatingByteSliceSink(&b)
+	value := AllocatingByteSliceSink(&b)
 	if err := g.GetGroup(in.GetGroup()).Get(ctx, in.GetKey(), value); err != nil {
 		return err
 	}

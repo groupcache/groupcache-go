@@ -83,8 +83,8 @@ import (
     "log/slog"
 
     "github.com/groupcache/groupcache-go/v3"
-	"github.com/groupcache/groupcache-go/v3/data"
-	"github.com/groupcache/groupcache-go/v3/transport/peer"
+    "github.com/groupcache/groupcache-go/v3/transport"
+    "github.com/groupcache/groupcache-go/v3/transport/peer"
 )
 
 func ExampleUsage() {
@@ -116,26 +116,35 @@ func ExampleUsage() {
     })
 
     // Create a new group cache with a max cache size of 3MB
-    group := d.NewGroup("users", 3000000, groupcache.GetterFunc(
-        func(ctx context.Context, id string, dest data.Sink) error {
-
-            // Returns a protobuf struct `User`
-            user, err := fetchUserFromMongo(ctx, id)
-            if err != nil {
+    group, err := d.NewGroup("users", 3000000, groupcache.GetterFunc(
+        func(ctx context.Context, id string, dest transport.Sink) error {
+            // In a real scenario we might fetch the value from a database.
+            /*if user, err := fetchUserFromMongo(ctx, id); err != nil {
                 return err
+            }*/
+
+            user := User{
+                Id:      "12345",
+                Name:    "John Doe",
+                Age:     40,
             }
 
             // Set the user in the groupcache to expire after 5 minutes
-            return dest.SetProto(&user, time.Now().Add(time.Minute*5))
+            if err := dest.SetProto(&user, time.Now().Add(time.Minute*5)); err != nil {
+                return err
+            }
+            return nil
         },
     ))
+    if err != nil {
+        log.Fatal(err)
+    }
 
-    var user User
-
-    ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500)
+    ctx, cancel = context.WithTimeout(context.Background(), time.Second)
     defer cancel()
 
-    if err := group.Get(ctx, "12345", data.ProtoSink(&user)); err != nil {
+	var user User
+	if err := group.Get(ctx, "12345", transport.ProtoSink(&user)); err != nil {
         log.Fatal(err)
     }
 
@@ -143,7 +152,6 @@ func ExampleUsage() {
     fmt.Printf("Id: %s\n", user.Id)
     fmt.Printf("Name: %s\n", user.Name)
     fmt.Printf("Age: %d\n", user.Age)
-    fmt.Printf("IsSuper: %t\n", user.IsSuper)
 
     // Remove the key from the groupcache
     if err := group.Remove(ctx, "12345"); err != nil {
@@ -214,7 +222,6 @@ func main() {
 }
 ```
 
-
 # Source Code Internals
 If you are reading this, you are likely in front of a Github page and are interested in building a custom transport
 or creating a Pull Request. In which case, the following explains the most of the important structs and how they 
@@ -235,14 +242,13 @@ If `SetPeers()` is not called, then the `groupcache.Instance` will operate as a 
 
 ### groupcache.Daemon
 This is a convenience struct which encapsulates a `groupcache.Instance` to simplify starting and stopping an instance and
-the associated transport. Calling `groupcache.SpawnDaemon()` calls `SpawnTransport()` on the provided transport to
+the associated transport. Calling `groupcache.SpawnDaemon()` calls `Transport.SpawnTransport()` on the provided transport to
 listen for incoming requests.
 
-### data.Group
+### groupcache.Group
 Holds the cache that makes up the "group" which can be shared with other instances of group cache. Each
 `groupcache.Instance` must create the same group using the same group name. Group names are how a "group" cache is
-accessed by other peers in the cluster. The `Group` interface is in the `data` package, so it can be shared
-by both `groupcache` and `transport`.
+accessed by other peers in the cluster.
 
 ### transport.Transport
 Is an interface which is used to communicate with other peers in the cluster. The groupcache project provides 
@@ -254,6 +260,10 @@ server started by the transport when `Transport.SpawnServer()` is called. It is 
 ensure `Transport.SpawnServer()` is called successfully, else the `groupcache.Instance` will not be able to receive
 any remote calls from peers in the cluster.
 
+### transport.Sink
+Sink is a collection of functions and structs which marshall and unmarshall strings, []bytes, and protobuf structs
+for use in transporting data from one instance to another.
+
 ### peer.Picker
 Is a consistent hash ring which holds an instantiated client for each peer in the cluster. It is used by   
 `groupcache.Instance` to choose which peer in the cluster owns a key in the selected "group" cache.
@@ -264,9 +274,6 @@ the current instance MUST be correctly identified by setting `IsSelf = true`. Wi
 self hash ring requests via the transport. To avoid accidentally creating a cluster without correctly identifying
 which peer in the cluster is our instance, `Instance.SetPeers()` will return an error if at least one peer with
 `IsSelf` is not set to `true`.
-
-### data package
-Contains data structures used by groupcache to serialize data between remote instances.
 
 ### cluster package
 Is a convenience package containing functions to easily spawn and shutdown a cluster of groupcache instances 

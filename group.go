@@ -24,12 +24,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/groupcache/groupcache-go/v3/internal/singleflight"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/pb"
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
 )
+
+// Group is the user facing interface for a group
+type Group interface {
+	Set(context.Context, string, []byte, time.Time, bool) error
+	Get(context.Context, string, transport.Sink) error
+	Remove(context.Context, string) error
+	UsedBytes() (int64, int64)
+	Name() string
+}
 
 // A Getter loads data for a key.
 type Getter interface {
@@ -39,13 +47,13 @@ type Getter interface {
 	// uniquely describe the loaded data, without an implicit
 	// current time, and without relying on cache expiration
 	// mechanisms.
-	Get(ctx context.Context, key string, dest data.Sink) error
+	Get(ctx context.Context, key string, dest transport.Sink) error
 }
 
 // A GetterFunc implements Getter with a function.
-type GetterFunc func(ctx context.Context, key string, dest data.Sink) error
+type GetterFunc func(ctx context.Context, key string, dest transport.Sink) error
 
-func (f GetterFunc) Get(ctx context.Context, key string, dest data.Sink) error {
+func (f GetterFunc) Get(ctx context.Context, key string, dest transport.Sink) error {
 	return f(ctx, key, dest)
 }
 
@@ -100,7 +108,7 @@ func (g *group) UsedBytes() (int64, int64) {
 	return g.mainCache.bytes(), g.hotCache.bytes()
 }
 
-func (g *group) Get(ctx context.Context, key string, dest data.Sink) error {
+func (g *group) Get(ctx context.Context, key string, dest transport.Sink) error {
 	g.Stats.Gets.Add(1)
 	if dest == nil {
 		return errors.New("groupcache: nil dest Sink")
@@ -109,7 +117,7 @@ func (g *group) Get(ctx context.Context, key string, dest data.Sink) error {
 
 	if cacheHit {
 		g.Stats.CacheHits.Add(1)
-		return data.SetSinkView(dest, value)
+		return transport.SetSinkView(dest, value)
 	}
 
 	// Optimization to avoid double unmarshalling or copying: keep
@@ -124,7 +132,7 @@ func (g *group) Get(ctx context.Context, key string, dest data.Sink) error {
 	if destPopulated {
 		return nil
 	}
-	return data.SetSinkView(dest, value)
+	return transport.SetSinkView(dest, value)
 }
 
 func (g *group) Set(ctx context.Context, key string, value []byte, expire time.Time, hotCache bool) error {
@@ -201,7 +209,7 @@ func (g *group) Remove(ctx context.Context, key string) error {
 }
 
 // load loads key either by invoking the getter locally or by sending it to another machine.
-func (g *group) load(ctx context.Context, key string, dest data.Sink) (value data.ByteView, destPopulated bool, err error) {
+func (g *group) load(ctx context.Context, key string, dest transport.Sink) (value transport.ByteView, destPopulated bool, err error) {
 	g.Stats.Loads.Add(1)
 	viewi, err := g.loadGroup.Do(key, func() (interface{}, error) {
 		// Check the cache again because singleflight can only dedup calls
@@ -230,7 +238,7 @@ func (g *group) load(ctx context.Context, key string, dest data.Sink) (value dat
 			return value, nil
 		}
 		g.Stats.LoadsDeduped.Add(1)
-		var value data.ByteView
+		var value transport.ByteView
 		var err error
 		if peer, ok := g.instance.PickPeer(key); ok {
 
@@ -292,20 +300,20 @@ func (g *group) load(ctx context.Context, key string, dest data.Sink) (value dat
 		return value, nil
 	})
 	if err == nil {
-		value = viewi.(data.ByteView)
+		value = viewi.(transport.ByteView)
 	}
 	return
 }
 
-func (g *group) getLocally(ctx context.Context, key string, dest data.Sink) (data.ByteView, error) {
+func (g *group) getLocally(ctx context.Context, key string, dest transport.Sink) (transport.ByteView, error) {
 	err := g.getter.Get(ctx, key, dest)
 	if err != nil {
-		return data.ByteView{}, err
+		return transport.ByteView{}, err
 	}
 	return dest.View()
 }
 
-func (g *group) getFromPeer(ctx context.Context, peer peer.Client, key string) (data.ByteView, error) {
+func (g *group) getFromPeer(ctx context.Context, peer peer.Client, key string) (transport.ByteView, error) {
 	req := &pb.GetRequest{
 		Group: &g.name,
 		Key:   &key,
@@ -313,18 +321,18 @@ func (g *group) getFromPeer(ctx context.Context, peer peer.Client, key string) (
 	res := &pb.GetResponse{}
 	err := peer.Get(ctx, req, res)
 	if err != nil {
-		return data.ByteView{}, err
+		return transport.ByteView{}, err
 	}
 
 	var expire time.Time
 	if res.Expire != nil && *res.Expire != 0 {
 		expire = time.Unix(*res.Expire/int64(time.Second), *res.Expire%int64(time.Second))
 		if time.Now().After(expire) {
-			return data.ByteView{}, errors.New("peer returned expired value")
+			return transport.ByteView{}, errors.New("peer returned expired value")
 		}
 	}
 
-	value := data.ByteViewWithExpire(res.Value, expire)
+	value := transport.ByteViewWithExpire(res.Value, expire)
 
 	// Always populate the hot cache
 	g.populateCache(key, value, &g.hotCache)
@@ -353,7 +361,7 @@ func (g *group) removeFromPeer(ctx context.Context, peer peer.Client, key string
 	return peer.Remove(ctx, req)
 }
 
-func (g *group) lookupCache(key string) (value data.ByteView, ok bool) {
+func (g *group) lookupCache(key string) (value transport.ByteView, ok bool) {
 	if g.cacheBytes <= 0 {
 		return
 	}
@@ -374,7 +382,7 @@ func (g *group) localSet(key string, value []byte, expire time.Time, cache *cach
 		return
 	}
 
-	bv := data.ByteViewWithExpire(value, expire)
+	bv := transport.ByteViewWithExpire(value, expire)
 
 	// Ensure no requests are in flight
 	g.loadGroup.Lock(func() {
@@ -395,7 +403,7 @@ func (g *group) LocalRemove(key string) {
 	})
 }
 
-func (g *group) populateCache(key string, value data.ByteView, cache *cache) {
+func (g *group) populateCache(key string, value transport.ByteView, cache *cache) {
 	if g.cacheBytes <= 0 {
 		return
 	}

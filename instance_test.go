@@ -31,7 +31,6 @@ import (
 
 	"github.com/groupcache/groupcache-go/v3"
 	"github.com/groupcache/groupcache-go/v3/cluster"
-	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/pb/testpb"
 	"github.com/stretchr/testify/require"
@@ -39,14 +38,14 @@ import (
 )
 
 type TestGroup interface {
-	Get(ctx context.Context, key string, dest data.Sink) error
+	Get(ctx context.Context, key string, dest transport.Sink) error
 	CacheStats(which groupcache.CacheType) groupcache.CacheStats
 	ResetCacheSize(int64)
 }
 
 var (
 	once        sync.Once
-	protoGroup  data.Group
+	protoGroup  transport.Group
 	stringGroup TestGroup
 
 	stringCh = make(chan string)
@@ -71,7 +70,7 @@ func testSetup() {
 	instance := groupcache.New(groupcache.Options{})
 
 	g, _ := instance.NewGroup(stringGroupName, cacheSize,
-		groupcache.GetterFunc(func(_ context.Context, key string, dest data.Sink) error {
+		groupcache.GetterFunc(func(_ context.Context, key string, dest transport.Sink) error {
 			if key == fromChan {
 				key = <-stringCh
 			}
@@ -81,7 +80,7 @@ func testSetup() {
 	stringGroup = g.(TestGroup)
 
 	protoGroup, _ = instance.NewGroup(protoGroupName, cacheSize,
-		groupcache.GetterFunc(func(_ context.Context, key string, dest data.Sink) error {
+		groupcache.GetterFunc(func(_ context.Context, key string, dest transport.Sink) error {
 			if key == fromChan {
 				key = <-stringCh
 			}
@@ -105,7 +104,7 @@ func TestGetDupSuppressString(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		go func() {
 			var s string
-			if err := stringGroup.Get(dummyCtx, fromChan, data.StringSink(&s)); err != nil {
+			if err := stringGroup.Get(dummyCtx, fromChan, transport.StringSink(&s)); err != nil {
 				resc <- "ERROR:" + err.Error()
 				return
 			}
@@ -147,7 +146,7 @@ func TestGetDupSuppressProto(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		go func() {
 			tm := new(testpb.TestMessage)
-			if err := protoGroup.Get(dummyCtx, fromChan, data.ProtoSink(tm)); err != nil {
+			if err := protoGroup.Get(dummyCtx, fromChan, transport.ProtoSink(tm)); err != nil {
 				tm.Name = proto.String("ERROR:" + err.Error())
 			}
 			resc <- tm
@@ -189,7 +188,7 @@ func TestCachingExpire(t *testing.T) {
 	var fills int
 	instance := groupcache.New(groupcache.Options{})
 	g, err := instance.NewGroup(expireGroupName, cacheSize,
-		groupcache.GetterFunc(func(_ context.Context, key string, dest data.Sink) error {
+		groupcache.GetterFunc(func(_ context.Context, key string, dest transport.Sink) error {
 			fills++
 			return dest.SetString("ECHO:"+key, time.Now().Add(time.Millisecond*500))
 		}))
@@ -197,7 +196,7 @@ func TestCachingExpire(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		var s string
-		if err := g.Get(context.Background(), "TestCachingExpire-key", data.StringSink(&s)); err != nil {
+		if err := g.Get(context.Background(), "TestCachingExpire-key", transport.StringSink(&s)); err != nil {
 			t.Fatal(err)
 		}
 		if i == 1 {
@@ -214,7 +213,7 @@ func TestCaching(t *testing.T) {
 	fills := countFills(func() {
 		for i := 0; i < 10; i++ {
 			var s string
-			if err := stringGroup.Get(dummyCtx, "TestCaching-key", data.StringSink(&s)); err != nil {
+			if err := stringGroup.Get(dummyCtx, "TestCaching-key", transport.StringSink(&s)); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -230,7 +229,7 @@ func TestCacheEviction(t *testing.T) {
 	getTestKey := func() {
 		var res string
 		for i := 0; i < 10; i++ {
-			if err := stringGroup.Get(dummyCtx, testKey, data.StringSink(&res)); err != nil {
+			if err := stringGroup.Get(dummyCtx, testKey, transport.StringSink(&res)); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -249,7 +248,7 @@ func TestCacheEviction(t *testing.T) {
 	for bytesFlooded < cacheSize+1024 {
 		var res string
 		key := fmt.Sprintf("dummy-key-%d", bytesFlooded)
-		err := stringGroup.Get(dummyCtx, key, data.StringSink(&res))
+		err := stringGroup.Get(dummyCtx, key, transport.StringSink(&res))
 		require.NoError(t, err)
 		bytesFlooded += int64(len(key) + len(res))
 	}
@@ -278,7 +277,7 @@ func TestPeers(t *testing.T) {
 
 	var localHits, totalHits int
 	newGetter := func(idx int) groupcache.Getter {
-		return groupcache.GetterFunc(func(ctx context.Context, key string, dest data.Sink) error {
+		return groupcache.GetterFunc(func(ctx context.Context, key string, dest transport.Sink) error {
 			totalHits++
 			// Only record local (non-remote hits)
 			if idx == 0 {
@@ -320,7 +319,7 @@ func TestPeers(t *testing.T) {
 			key := net.IPv4(192, byte(r>>16), byte(r>>8), byte(r)).String()
 
 			var got string
-			err := group.Get(context.Background(), key, data.StringSink(&got))
+			err := group.Get(context.Background(), key, transport.StringSink(&got))
 			if err != nil {
 				t.Errorf("%s: error on key %q: %v", name, key, err)
 				continue
@@ -358,7 +357,7 @@ func TestTruncatingByteSliceTarget(t *testing.T) {
 
 	var buf [100]byte
 	s := buf[:]
-	if err := stringGroup.Get(dummyCtx, "short", data.TruncatingByteSliceSink(&s)); err != nil {
+	if err := stringGroup.Get(dummyCtx, "short", transport.TruncatingByteSliceSink(&s)); err != nil {
 		t.Fatal(err)
 	}
 	if want := "ECHO:short"; string(s) != want {
@@ -366,7 +365,7 @@ func TestTruncatingByteSliceTarget(t *testing.T) {
 	}
 
 	s = buf[:6]
-	if err := stringGroup.Get(dummyCtx, "truncated", data.TruncatingByteSliceSink(&s)); err != nil {
+	if err := stringGroup.Get(dummyCtx, "truncated", transport.TruncatingByteSliceSink(&s)); err != nil {
 		t.Fatal(err)
 	}
 	if want := "ECHO:t"; string(s) != want {
@@ -376,7 +375,7 @@ func TestTruncatingByteSliceTarget(t *testing.T) {
 
 func TestAllocatingByteSliceTarget(t *testing.T) {
 	var dst []byte
-	sink := data.AllocatingByteSliceSink(&dst)
+	sink := transport.AllocatingByteSliceSink(&dst)
 
 	inBytes := []byte("some bytes")
 	err := sink.SetBytes(inBytes, time.Time{})
@@ -408,7 +407,7 @@ func TestNoDeDup(t *testing.T) {
 	var totalHits int
 
 	gc := groupcache.New(groupcache.Options{})
-	getter := groupcache.GetterFunc(func(ctx context.Context, key string, dest data.Sink) error {
+	getter := groupcache.GetterFunc(func(ctx context.Context, key string, dest transport.Sink) error {
 		time.Sleep(time.Second)
 		totalHits++
 		return dest.SetString("value", time.Time{})
@@ -426,7 +425,7 @@ func TestNoDeDup(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				var s string
-				if err := g.Get(dummyCtx, "key", data.StringSink(&s)); err != nil {
+				if err := g.Get(dummyCtx, "key", transport.StringSink(&s)); err != nil {
 					resultCh <- "ERROR:" + err.Error()
 					return
 				}

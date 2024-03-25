@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package data_test
+package transport_test
 
 import (
 	"bytes"
@@ -23,12 +23,12 @@ import (
 	"io"
 	"testing"
 
-	"github.com/groupcache/groupcache-go/v3/data"
+	"github.com/groupcache/groupcache-go/v3/transport"
 )
 
 func TestByteView(t *testing.T) {
 	for _, s := range []string{"", "x", "yy"} {
-		for _, v := range []data.ByteView{data.ByteViewFrom([]byte(s)), data.ByteViewFrom(s)} {
+		for _, v := range []transport.ByteView{transport.ByteViewFrom([]byte(s)), transport.ByteViewFrom(s)} {
 			name := fmt.Sprintf("string %q, view %+v", s, v)
 			if v.Len() != len(s) {
 				t.Errorf("%s: Len = %d; want %d", name, v.Len(), len(s))
@@ -78,7 +78,7 @@ func TestByteViewEqual(t *testing.T) {
 		{"x", []byte("yy"), false},
 	}
 	for i, tt := range tests {
-		va := data.ByteViewFrom(tt.a)
+		va := transport.ByteViewFrom(tt.a)
 		if bytes, ok := tt.b.([]byte); ok {
 			if got := va.EqualBytes(bytes); got != tt.want {
 				t.Errorf("%d. EqualBytes = %v; want %v", i, got, tt.want)
@@ -88,7 +88,7 @@ func TestByteViewEqual(t *testing.T) {
 				t.Errorf("%d. EqualString = %v; want %v", i, got, tt.want)
 			}
 		}
-		if got := va.Equal(data.ByteViewFrom(tt.b)); got != tt.want {
+		if got := va.Equal(transport.ByteViewFrom(tt.b)); got != tt.want {
 			t.Errorf("%d. Equal = %v; want %v", i, got, tt.want)
 		}
 	}
@@ -119,7 +119,7 @@ func TestByteViewSlice(t *testing.T) {
 		},
 	}
 	for i, tt := range tests {
-		for _, v := range []data.ByteView{data.ByteViewFrom([]byte(tt.in)), data.ByteViewFrom(tt.in)} {
+		for _, v := range []transport.ByteView{transport.ByteViewFrom([]byte(tt.in)), transport.ByteViewFrom(tt.in)} {
 			name := fmt.Sprintf("test %d, view %+v", i, v)
 			if tt.to != nil {
 				v = v.Slice(tt.from, tt.to.(int))
