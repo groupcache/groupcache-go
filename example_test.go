@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/groupcache/groupcache-go/v3"
-	"github.com/groupcache/groupcache-go/v3/cluster"
 	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
@@ -38,12 +37,13 @@ func ExampleNew() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 
 	// Starts an instance of groupcache with the provided transport
-	d, err := cluster.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{
+	d, err := groupcache.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{
 		// If transport is nil, defaults to HttpTransport
 		Transport: nil,
-		HashFn:    fnv1.HashBytes64,
-		Logger:    slog.Default(),
-		Replicas:  50,
+		// The following are all optional
+		HashFn:   fnv1.HashBytes64,
+		Logger:   slog.Default(),
+		Replicas: 50,
 	})
 	cancel()
 	if err != nil {
@@ -51,7 +51,7 @@ func ExampleNew() {
 	}
 
 	// Create a new group cache with a max cache size of 3MB
-	group, err := d.GroupCache.NewGroup("users", 3000000, groupcache.GetterFunc(
+	group, err := d.NewGroup("users", 3000000, groupcache.GetterFunc(
 		func(ctx context.Context, id string, dest data.Sink) error {
 			// Set the user in the groupcache to expire after 5 minutes
 			if err := dest.SetString("hello", time.Now().Add(time.Minute*5)); err != nil {

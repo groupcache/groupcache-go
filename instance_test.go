@@ -291,7 +291,7 @@ func TestPeers(t *testing.T) {
 	var groups []TestGroup
 	// Create a group for each instance in the cluster
 	for idx, d := range cluster.ListDaemons() {
-		g, err := d.GroupCache.NewGroup(groupName, 1<<20, newGetter(idx))
+		g, err := d.GetInstance().NewGroup(groupName, 1<<20, newGetter(idx))
 		require.NoError(t, err)
 		groups = append(groups, g.(TestGroup))
 	}
@@ -304,7 +304,7 @@ func TestPeers(t *testing.T) {
 
 	run := func(t *testing.T, name string, n int, wantSummary string) {
 		t.Helper()
-		group := cluster.DaemonAt(0).GroupCache.GetGroup(groupName)
+		group := cluster.DaemonAt(0).GetInstance().GetGroup(groupName)
 
 		// Reset counters
 		localHits, totalHits = 0, 0

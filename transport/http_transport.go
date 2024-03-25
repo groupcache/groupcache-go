@@ -121,10 +121,10 @@ type HttpTransportOptions struct {
 
 type HttpTransport struct {
 	opts     HttpTransportOptions
-	listener net.Listener
-	server   *http.Server
 	instance GroupCacheInstance
 	wg       sync.WaitGroup
+	listener net.Listener
+	server   *http.Server
 }
 
 // NewHttpTransport returns a new HttpTransport instance based on the provided HttpTransportOptions.

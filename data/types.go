@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+// TODO: Attempt to move this into `transport` package and Sink back into `groupcache` package
+
 type Group interface {
 	Set(context.Context, string, []byte, time.Time, bool) error
 	Get(context.Context, string, Sink) error

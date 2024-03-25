@@ -70,7 +70,7 @@ func TestHttpTransport(t *testing.T) {
 
 	// Create a group for each instance in the cluster
 	for idx, d := range cluster.ListDaemons() {
-		_, err := d.GroupCache.NewGroup(groupName, 1<<20, newGetter(idx))
+		_, err := d.GetInstance().NewGroup(groupName, 1<<20, newGetter(idx))
 		require.NoError(t, err)
 	}
 
@@ -97,22 +97,22 @@ func TestHttpTransport(t *testing.T) {
 	owner := cluster.FindOwningDaemon("new-key")
 	for i := 0; i < 2; i++ {
 		var resp pb.GetResponse
-		require.NoError(t, getRequest(ctx, owner.Client(), groupName, "new-key", &resp))
+		require.NoError(t, getRequest(ctx, owner.MustClient(), groupName, "new-key", &resp))
 	}
 	// Should result in only 1 server get
 	assert.Equal(t, 1, serverHits)
 
 	// Remove the key from the owner and we should see another server hit
 	var resp pb.GetResponse
-	require.NoError(t, removeRequest(ctx, owner.Client(), groupName, "new-key"))
-	require.NoError(t, getRequest(ctx, owner.Client(), groupName, "new-key", &resp))
+	require.NoError(t, removeRequest(ctx, owner.MustClient(), groupName, "new-key"))
+	require.NoError(t, getRequest(ctx, owner.MustClient(), groupName, "new-key", &resp))
 	assert.Equal(t, 2, serverHits)
 
 	// Remove the key, and set it with a different value
-	require.NoError(t, removeRequest(ctx, owner.Client(), groupName, "new-key"))
-	require.NoError(t, setRequest(ctx, owner.Client(), groupName, "new-key", "new-value"))
+	require.NoError(t, removeRequest(ctx, owner.MustClient(), groupName, "new-key"))
+	require.NoError(t, setRequest(ctx, owner.MustClient(), groupName, "new-key", "new-value"))
 
-	require.NoError(t, getRequest(ctx, owner.Client(), groupName, "new-key", &resp))
+	require.NoError(t, getRequest(ctx, owner.MustClient(), groupName, "new-key", &resp))
 	assert.Equal(t, []byte("new-value"), resp.Value)
 	// Should not see any new server hits
 	assert.Equal(t, 2, serverHits)

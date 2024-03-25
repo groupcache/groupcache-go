@@ -83,28 +83,23 @@ import (
     "log/slog"
 
     "github.com/groupcache/groupcache-go/v3"
-    "github.com/groupcache/groupcache-go/v3/cluster"
-    "github.com/groupcache/groupcache-go/v3/data"
-    "github.com/segmentio/fasthash/fnv1"
+	"github.com/groupcache/groupcache-go/v3/data"
+	"github.com/groupcache/groupcache-go/v3/transport/peer"
 )
 
 func ExampleUsage() {
     ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
     defer cancel()
 
-    // Starts an instance of groupcache with the provided transport
-    d, err := cluster.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{
-        // If transport is nil, defaults to transport.HttpTransport
-        Transport: nil,
-        HashFn:    fnv1.HashBytes64,
-        Logger:    slog.Default(),
-        Replicas:  50,
-    })
+    // SpawnDaemon is a convenience function which Starts an instance of groupcache 
+	// with the provided transport and listens for groupcache HTTP requests on the address provided.
+    d, err := groupcache.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{})
     if err != nil {
         log.Fatal("while starting server on 192.168.1.1:8080")
     }
 
-    // Manually set peers, or use some discovery system to identify peers
+    // Manually set peers, or use some discovery system to identify peers.
+    // It is safe to call SetPeers() whenever the peer topology changes
     d.SetPeers(ctx, []peer.Info{
         {
             Address: "192.168.1.1:8080",
@@ -121,8 +116,8 @@ func ExampleUsage() {
     })
 
     // Create a new group cache with a max cache size of 3MB
-    group := d.GroupCache.NewGroup("users", 3000000, groupcache.GetterFunc(
-        func(ctx context.Context, id string, dest groupcache.Sink) error {
+    group := d.NewGroup("users", 3000000, groupcache.GetterFunc(
+        func(ctx context.Context, id string, dest data.Sink) error {
 
             // Returns a protobuf struct `User`
             user, err := fetchUserFromMongo(ctx, id)
@@ -140,7 +135,7 @@ func ExampleUsage() {
     ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500)
     defer cancel()
 
-    if err := group.Get(ctx, "12345", groupcache.ProtoSink(&user)); err != nil {
+    if err := group.Get(ctx, "12345", data.ProtoSink(&user)); err != nil {
         log.Fatal(err)
     }
 
@@ -155,7 +150,7 @@ func ExampleUsage() {
         log.Fatal(err)
     }
 
-    // Shutdown the daemon
+    // Shutdown the instance and HTTP listeners
     d.Shutdown(ctx)
 }
 ```
@@ -238,6 +233,11 @@ called at any point during `groupcache.Instance` operation as peers leave or joi
 
 If `SetPeers()` is not called, then the `groupcache.Instance` will operate as a local only cache.
 
+### groupcache.Daemon
+This is a convenience struct which encapsulates a `groupcache.Instance` to simplify starting and stopping an instance and
+the associated transport. Calling `groupcache.SpawnDaemon()` calls `SpawnTransport()` on the provided transport to
+listen for incoming requests.
+
 ### data.Group
 Holds the cache that makes up the "group" which can be shared with other instances of group cache. Each
 `groupcache.Instance` must create the same group using the same group name. Group names are how a "group" cache is
@@ -269,17 +269,8 @@ which peer in the cluster is our instance, `Instance.SetPeers()` will return an 
 Contains data structures used by groupcache to serialize data between remote instances.
 
 ### cluster package
-Is a convenience package containing functions to easily spawn and shutdown groupcache instances (called daemons) or to
-create a local cluster of group cache instances using the default `transport.HttpTransport`.
-
-**SpawnDaemon()** Spawns a single instance of groupcache using the config provided. The returned *Daemon has methods which
-make interacting with the groupcache instance simple.
-
-```go
-// Starts an instance of groupcache with the provided transport
-d, _ := cluster.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{})
-defer d.Shutdown(context.Background())
-```
+Is a convenience package containing functions to easily spawn and shutdown a cluster of groupcache instances 
+(called daemons).
 
 **Start()** and **StartWith()** starts a local cluster of groupcache daemons suitable for testing. Users who wish to
 test groupcache in their own project test suites can use these methods to start and stop clusters.

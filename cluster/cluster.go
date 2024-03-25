@@ -16,28 +16,8 @@ limitations under the License.
 
 /*
 Package cluster contains convince functions which make managing the creation of multiple groupcache instances
-simple.
-
-# SpawnDaemon()
-
-Spawns a single instance of groupcache using the config provided. The returned *Daemon has methods which
-make interacting with the groupcache instance simple.
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-
-	// Starts an instance of groupcache with the provided transport
-	d, err := cluster.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{})
-	if err != nil {
-		log.Fatal("while starting server on 192.168.1.1:8080")
-	}
-
-	d.Shutdown(context.Background())
-
-# Start() and StartWith()
-
-Starts a local cluster of groupcache daemons suitable for testing. Users who wish to test groupcache in their
-own project test suites can use these methods to start and stop clusters. See cluster_test.go for more examples.
+simple. To start a local cluster of groupcache daemons suitable for testing you can call cluster.Start()
+or cluster.StartWith(). See cluster_test.go for more examples.
 
 	err := cluster.Start(context.Background(), 2, groupcache.Options{})
 	require.NoError(t, err)
@@ -59,7 +39,7 @@ import (
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
 )
 
-var _daemons []*Daemon
+var _daemons []*groupcache.Daemon
 var _peers []peer.Info
 
 // ListPeers returns a list of all peers in the cluster
@@ -68,12 +48,12 @@ func ListPeers() []peer.Info {
 }
 
 // ListDaemons returns a list of all daemons in the cluster
-func ListDaemons() []*Daemon {
+func ListDaemons() []*groupcache.Daemon {
 	return _daemons
 }
 
 // DaemonAt returns a specific daemon
-func DaemonAt(idx int) *Daemon {
+func DaemonAt(idx int) *groupcache.Daemon {
 	return _daemons[idx]
 }
 
@@ -83,8 +63,12 @@ func PeerAt(idx int) peer.Info {
 }
 
 // FindOwningDaemon finds the daemon which owns the key provided
-func FindOwningDaemon(key string) *Daemon {
-	c, isRemote := _daemons[0].GroupCache.PickPeer(key)
+func FindOwningDaemon(key string) *groupcache.Daemon {
+	if len(_daemons) == 0 {
+		panic("'_daemon' is empty; start a cluster with Start() or StartWith()")
+	}
+
+	c, isRemote := _daemons[0].GetInstance().PickPeer(key)
 	if !isRemote {
 		return _daemons[0]
 	}
@@ -124,7 +108,7 @@ func StartWith(ctx context.Context, peers []peer.Info, opts groupcache.Options) 
 	}
 
 	for _, p := range peers {
-		d, err := SpawnDaemon(ctx, p.Address, opts)
+		d, err := groupcache.SpawnDaemon(ctx, p.Address, opts)
 		if err != nil {
 			return fmt.Errorf("StartWith: while starting daemon for '%s': %w", p.Address, err)
 		}
@@ -158,7 +142,7 @@ func Restart(ctx context.Context) error {
 		if err := _daemons[i].Start(ctx); err != nil {
 			return err
 		}
-		_ = _daemons[i].GroupCache.SetPeers(ctx, _peers)
+		_ = _daemons[i].GetInstance().SetPeers(ctx, _peers)
 	}
 	return nil
 }
