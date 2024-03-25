@@ -1,3 +1,52 @@
+/*
+Copyright Derrick J Wippler
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/*
+Package cluster contains convince functions which make managing the creation of multiple groupcache instances
+simple.
+
+# SpawnDaemon()
+
+Spawns a single instance of groupcache using the config provided. The returned *Daemon has methods which
+make interacting with the groupcache instance simple.
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	// Starts an instance of groupcache with the provided transport
+	d, err := cluster.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{})
+	if err != nil {
+		log.Fatal("while starting server on 192.168.1.1:8080")
+	}
+
+	d.Shutdown(context.Background())
+
+# Start() and StartWith()
+
+Starts a local cluster of groupcache daemons suitable for testing. Users who wish to test groupcache in their
+own project test suites can use these methods to start and stop clusters. See cluster_test.go for more examples.
+
+	err := cluster.Start(context.Background(), 2, groupcache.Options{})
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, len(cluster.ListPeers()))
+	assert.Equal(t, 2, len(cluster.ListDaemons()))
+	err = cluster.Shutdown(context.Background())
+	require.NoError(t, err)
+*/
 package cluster
 
 import (

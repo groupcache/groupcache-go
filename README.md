@@ -160,6 +160,66 @@ func ExampleUsage() {
 }
 ```
 
+# HTTP integration
+This is a quick guide on how to use groupcache in a service that is already listening for HTTP requests. In some
+circumstances you may want to have groupcache response using the same HTTP port that non groupcache requests are
+received through. In this case you must explicitly create the `transport.HttpTransport` which can then be passed
+to your HTTP router/handler.
+
+```go
+func main() {
+    mux := http.NewServeMux()
+
+    // Add endpoints specific to our application
+    mux.HandleFunc("/index", func(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprintf(w, "Hello, this is a non groupcache handler")
+    })
+
+    // Explicitly instantiate and use the HTTP transport
+    t := transport.NewHttpTransport(
+        transport.HttpTransportOptions{
+        // BasePath specifies the HTTP path that will serve groupcache requests.
+        // If blank, it defaults to "/_groupcache/".
+        BasePath: "/_groupcache/",
+        // Context optionally specifies a context for the server to use when it
+        // receives a request.
+        Context: nil,
+        // Client optionally provide a custom http client with TLS config
+        Client: nil,
+        // Scheme is is either `http` or `https` defaults to `http`
+        Scheme: "http",
+        },
+    )
+
+    // Create a new groupcache instance
+    instance := groupcache.New(groupcache.Options{
+        // All of these fields are optional
+        HashFn:    fnv1.HashBytes64,
+        Logger:    slog.Default(),
+        Transport: t,
+        Replicas:  50,
+    })
+
+    // Add the groupcache handler
+    mux.Handle("/_groupcache/", t)
+
+    server := http.Server{
+        Addr:    "192.168.1.1:8080",
+        Handler: mux,
+    }
+
+    // Start a HTTP server to listen for peer requests from the groupcache
+    go func() {
+        log.Printf("Serving....\n")
+        if err := server.ListenAndServe(); err != nil {
+            log.Fatal(err)
+        }
+    }()
+    defer func() { _ = server.Shutdown(context.Background()) }()
+}
+```
+
+
 # Source Code Internals
 If you are reading this, you are likely in front of a Github page and are interested in building a custom transport
 or creating a Pull Request. In which case, the following explains the most of the important structs and how they 
@@ -201,7 +261,7 @@ Is a consistent hash ring which holds an instantiated client for each peer in th
 ### peer.Info
 Is a struct which holds information used to identify each peer in the cluster. The `peer.Info` struct which represents
 the current instance MUST be correctly identified by setting `IsSelf = true`. Without this, groupcache would send its 
-self hash ring requests via the transport. To avoid accidentaly creating a cluster without correctly identifying
+self hash ring requests via the transport. To avoid accidentally creating a cluster without correctly identifying
 which peer in the cluster is our instance, `Instance.SetPeers()` will return an error if at least one peer with
 `IsSelf` is not set to `true`.
 
@@ -210,12 +270,26 @@ Contains data structures used by groupcache to serialize data between remote ins
 
 ### cluster package
 Is a convenience package containing functions to easily spawn and shutdown groupcache instances (called daemons) or to
-create a cluster of group cache instances using the default `transport.HttpTransport`.
+create a local cluster of group cache instances using the default `transport.HttpTransport`.
+
+**SpawnDaemon()** Spawns a single instance of groupcache using the config provided. The returned *Daemon has methods which
+make interacting with the groupcache instance simple.
+
 ```go
-// Start a 3 instance cluster using all the default options
+// Starts an instance of groupcache with the provided transport
+d, _ := cluster.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{})
+defer d.Shutdown(context.Background())
+```
+
+**Start()** and **StartWith()** starts a local cluster of groupcache daemons suitable for testing. Users who wish to
+test groupcache in their own project test suites can use these methods to start and stop clusters.
+See `cluster_test.go` for more examples.
+```go
+// Start a 3 instance cluster using the default options
 _ := cluster.Start(context.Background(), 3, groupcache.Options{})
 defer cluster.Shutdown(context.Background())
 ```
 
 ### Code Map
 ![docs/code-diagram.png](docs/code-diagram.png)
+

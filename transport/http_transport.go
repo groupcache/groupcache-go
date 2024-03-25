@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	defaultBasePath = "/_groupcache/"
+	DefaultBasePath = "/_groupcache/"
 	defaultScheme   = "http"
 )
 
@@ -142,7 +142,7 @@ type HttpTransport struct {
 //	 transport.Register(instance)
 func NewHttpTransport(opts HttpTransportOptions) *HttpTransport {
 	if opts.BasePath == "" {
-		opts.BasePath = defaultBasePath
+		opts.BasePath = DefaultBasePath
 	}
 
 	if opts.Scheme == "" {

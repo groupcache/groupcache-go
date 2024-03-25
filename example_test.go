@@ -1,14 +1,30 @@
+/*
+Copyright Derrick J Wippler
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package groupcache_test
 
 import (
 	"context"
 	"fmt"
-	"github.com/groupcache/groupcache-go/v3"
 	"log"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/groupcache/groupcache-go/v3"
 	"github.com/groupcache/groupcache-go/v3/cluster"
 	"github.com/groupcache/groupcache-go/v3/data"
 	"github.com/groupcache/groupcache-go/v3/transport"
@@ -78,7 +94,7 @@ func ExampleNewHttpTransport() {
 	})
 
 	// Explicitly instantiate and use the HTTP transport
-	transport := transport.NewHttpTransport(
+	t := transport.NewHttpTransport(
 		transport.HttpTransportOptions{
 			// BasePath specifies the HTTP path that will serve groupcache requests.
 			// If blank, it defaults to "/_groupcache/".
@@ -97,7 +113,7 @@ func ExampleNewHttpTransport() {
 	instance := groupcache.New(groupcache.Options{
 		HashFn:    fnv1.HashBytes64,
 		Logger:    slog.Default(),
-		Transport: transport,
+		Transport: t,
 		Replicas:  50,
 	})
 
@@ -126,7 +142,7 @@ func ExampleNewHttpTransport() {
 	//defer d.Shutdown(context.Background())
 
 	// Add the groupcache handler
-	mux.Handle("/_groupcache/", transport)
+	mux.Handle("/_groupcache/", t)
 
 	server := http.Server{
 		Addr:    "192.168.1.1:8080",
