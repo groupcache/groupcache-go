@@ -98,7 +98,8 @@ type HttpTransportOptions struct {
 	// defaults to http.DefaultClient
 	Client *http.Client
 
-	// Scheme (Optional) is is either `http` or `https`
+	// Scheme (Optional) is either `http` or `https`. Should always be 'http' as
+	// 'https' is not currently supported. `Scheme` is reserved here for future use.
 	// defaults to `http`
 	Scheme string
 
@@ -155,10 +156,12 @@ func NewHttpTransport(opts HttpTransportOptions) *HttpTransport {
 	}
 }
 
+// Register registers the provided instance with this transport.
 func (t *HttpTransport) Register(instance GroupCacheInstance) {
 	t.instance = instance
 }
 
+// New creates a new unregistered HttpTransport, using the same options as its parent.
 func (t *HttpTransport) New() Transport {
 	return NewHttpTransport(t.opts)
 }
@@ -275,6 +278,11 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		group.LocalSet(*out.Key, out.Value, expire)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Only GET, DELETE, PUT are supported", http.StatusMethodNotAllowed)
 		return
 	}
 

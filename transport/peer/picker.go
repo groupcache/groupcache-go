@@ -26,7 +26,10 @@ import (
 	"github.com/segmentio/fasthash/fnv1"
 )
 
-const defaultReplicas = 50
+// DefaultReplicas is set at 50, which is enough to create a reasonably even key distribution.
+// As the size of your cluster increases, you may want to consider increasing the number
+// of replicas if you are having un-even distribution issues.
+const DefaultReplicas = 50
 
 // Info represents information about a peer. This struct is intended to be used by peer discovery mechanisms
 // when calling `Instance.SetPeers()`
@@ -80,7 +83,7 @@ func NewPicker(opts Options) *Picker {
 		m.opts.HashFn = fnv1.HashBytes64
 	}
 	if m.opts.Replicas == 0 {
-		m.opts.Replicas = defaultReplicas
+		m.opts.Replicas = DefaultReplicas
 	}
 	return m
 }

@@ -34,8 +34,7 @@ func (e *ErrNotFound) Error() string {
 
 func (e *ErrNotFound) Is(target error) bool {
 	var errNotFound *ErrNotFound
-	ok := errors.As(target, &errNotFound)
-	return ok
+	return errors.As(target, &errNotFound)
 }
 
 // ErrRemoteCall is returned from `group.Get()` when an error that is not a `ErrNotFound`
@@ -50,6 +49,5 @@ func (e *ErrRemoteCall) Error() string {
 
 func (e *ErrRemoteCall) Is(target error) bool {
 	var errRemoteCall *ErrRemoteCall
-	ok := errors.As(target, &errRemoteCall)
-	return ok
+	return errors.As(target, &errRemoteCall)
 }

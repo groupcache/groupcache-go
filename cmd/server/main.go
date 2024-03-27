@@ -41,7 +41,7 @@ var store = map[string]string{}
 
 func main() {
 	addrFlag := flag.String("addr", "localhost:8080", "address:port to bind to")
-	peerFlag := flag.String("peers", "localhost:8080", "a command separated list of groupcache peers")
+	peerFlag := flag.String("peers", "localhost:8080", "a comma-separated list of groupcache peers")
 	flag.Parse()
 
 	var peers []peer.Info

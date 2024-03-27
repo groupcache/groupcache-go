@@ -18,7 +18,7 @@ limitations under the License.
 // Package groupcache provides a data loading mechanism with caching
 // and de-duplication that works across a set of peer processes.
 //
-// Each data Get first consults its local cache, otherwise delegates
+// Each Get() call first consults its local cache, otherwise delegates
 // to the requested key's canonical owner, which then checks its cache
 // or finally gets the data.  In the common case, many concurrent
 // cache misses across a set of peers for the same key result in just
@@ -43,7 +43,7 @@ type Logger interface {
 
 // Options is the configuration for this instance of groupcache
 type Options struct {
-	// HashFn a function type that is used to calculate a hash used in the hash ring
+	// HashFn is a function type that is used to calculate a hash used in the hash ring
 	// Default is fnv1.HashBytes64
 	HashFn peer.HashFn
 

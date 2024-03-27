@@ -104,7 +104,7 @@ func (g *group) Name() string {
 }
 
 // UsedBytes returns the total number of bytes used by the main and hot caches
-func (g *group) UsedBytes() (int64, int64) {
+func (g *group) UsedBytes() (mainCache int64, hotCache int64) {
 	return g.mainCache.bytes(), g.hotCache.bytes()
 }
 
@@ -163,6 +163,12 @@ func (g *group) Set(ctx context.Context, key string, value []byte, expire time.T
 
 // Remove clears the key from our cache then forwards the remove
 // request to all peers.
+//
+// ### Consistency Warning
+// This method implements a best case design since it is possible a temporary network disruption could
+// occur resulting in remove requests never making it their peers. In practice this scenario is rare
+// and the system typically remains consistent. However, in case of an inconsistency we recommend placing
+// an expiration time on your values to ensure the cluster eventually becomes consistent again.
 func (g *group) Remove(ctx context.Context, key string) error {
 	_, err := g.removeGroup.Do(key, func() (interface{}, error) {
 
@@ -176,7 +182,7 @@ func (g *group) Remove(ctx context.Context, key string) error {
 		// Remove from our cache next
 		g.LocalRemove(key)
 		wg := sync.WaitGroup{}
-		errs := make(chan error)
+		errCh := make(chan error)
 
 		// Asynchronously clear the key from all hot and main caches of peers
 		for _, p := range g.instance.getAllPeers() {
@@ -187,23 +193,21 @@ func (g *group) Remove(ctx context.Context, key string) error {
 
 			wg.Add(1)
 			go func(p peer.Client) {
-				errs <- g.removeFromPeer(ctx, p, key)
+				errCh <- g.removeFromPeer(ctx, p, key)
 				wg.Done()
 			}(p)
 		}
 		go func() {
 			wg.Wait()
-			close(errs)
+			close(errCh)
 		}()
 
-		// TODO(thrawn01): Should we report all errors? Reporting context
-		//  cancelled error for each peer doesn't make much sense.
-		var err error
-		for e := range errs {
-			err = e
+		m := &MultiError{}
+		for err := range errCh {
+			m.Add(err)
 		}
 
-		return nil, err
+		return nil, m.NilOrError()
 	})
 	return err
 }
@@ -327,9 +331,6 @@ func (g *group) getFromPeer(ctx context.Context, peer peer.Client, key string) (
 	var expire time.Time
 	if res.Expire != nil && *res.Expire != 0 {
 		expire = time.Unix(*res.Expire/int64(time.Second), *res.Expire%int64(time.Second))
-		if time.Now().After(expire) {
-			return transport.ByteView{}, errors.New("peer returned expired value")
-		}
 	}
 
 	value := transport.ByteViewWithExpire(res.Value, expire)

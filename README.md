@@ -19,8 +19,8 @@ For API docs and examples, see http://godoc.org/github.com/groupcache/groupcache
   value will expire. If you don't want expiration, pass the zero value for
   `time.Time` (for instance, `time.Time{}`). Expiration is handled by the LRU Cache
   when a `Get()` on a key is requested. This means no network coordination of
-  expired values is needed. However, this does require that time on all nodes in the
-  cluster is synchronized for consistent expiration of values.
+  expired values is needed. However, this DOES require that the clock on all nodes in the
+  cluster are synchronized for consistent expiration of values.
 * Now always populating the hotcache. A more complex algorithm is unnecessary
   when the LRU cache will ensure the most used values remain in the cache. The
   evict code ensures the hotcache never overcrowds the maincache.
@@ -65,11 +65,11 @@ In a nutshell, a groupcache lookup of **Get("foo")** looks like:
     peer) is the owner of it?  If so, use it.
 
  3. Amongst all the peers in my set of N, am I the owner of the key
-    "foo"?  (e.g. does it consistent hash to 5?)  If so, load it.  If
-    other callers come in, via the same process or via RPC requests
-    from peers, they block waiting for the load to finish and get the
-    same answer.  If not, RPC to the peer that's the owner and get
-    the answer.  If the RPC fails, just load it locally (still with
+    "foo"?  (e.g. does it consistent hash to 5?)  If so, load it and 
+    store in the local cache..  If other callers come in, via the same 
+    process or via RPC requests from peers, they block waiting for the load 
+    to finish and get the same answer.  If not, RPC to the peer that's the 
+    owner and get the answer.  If the RPC fails, just load it locally (still with
     local dup suppression).
 
 ## Example
@@ -92,7 +92,7 @@ func ExampleUsage() {
     defer cancel()
 
     // SpawnDaemon is a convenience function which Starts an instance of groupcache 
-	// with the provided transport and listens for groupcache HTTP requests on the address provided.
+    // with the provided transport and listens for groupcache HTTP requests on the address provided.
     d, err := groupcache.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{})
     if err != nil {
         log.Fatal("while starting server on 192.168.1.1:8080")
@@ -143,8 +143,8 @@ func ExampleUsage() {
     ctx, cancel = context.WithTimeout(context.Background(), time.Second)
     defer cancel()
 
-	var user User
-	if err := group.Get(ctx, "12345", transport.ProtoSink(&user)); err != nil {
+    var user User
+    if err := group.Get(ctx, "12345", transport.ProtoSink(&user)); err != nil {
         log.Fatal(err)
     }
 
@@ -165,7 +165,7 @@ func ExampleUsage() {
 
 # HTTP integration
 This is a quick guide on how to use groupcache in a service that is already listening for HTTP requests. In some
-circumstances you may want to have groupcache response using the same HTTP port that non groupcache requests are
+circumstances you may want to have groupcache respond using the same HTTP port that non groupcache requests are
 received through. In this case you must explicitly create the `transport.HttpTransport` which can then be passed
 to your HTTP router/handler.
 
