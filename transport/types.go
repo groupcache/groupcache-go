@@ -1,5 +1,5 @@
 /*
-Copyright 2012 Google Inc.
+Copyright Derrick J Wippler
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,29 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-syntax = "proto2";
+package transport
 
-package groupcachepb;
+import (
+	"context"
+	"time"
+)
 
-message GetRequest {
-  required string group = 1;
-  required string key = 2; // not actually required/guaranteed to be UTF-8
-}
-
-message GetResponse {
-  optional bytes value = 1;
-  optional double minute_qps = 2;
-  optional int64 expire = 3;
-}
-
-message SetRequest {
-  required string group = 1;
-  required string key = 2;
-  optional bytes value = 3;
-  optional int64 expire = 4;
-}
-
-service GroupCache {
-  rpc Get(GetRequest) returns (GetResponse) {
-  };
+type Group interface {
+	Set(context.Context, string, []byte, time.Time, bool) error
+	Get(context.Context, string, Sink) error
+	Remove(context.Context, string) error
+	UsedBytes() (int64, int64)
+	Name() string
 }

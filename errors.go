@@ -1,33 +1,35 @@
 package groupcache
 
-// ErrNotFound should be returned from an implementation of `GetterFunc` to indicate the
-// requested value is not available. When remote HTTP calls are made to retrieve values from
-// other groupcache instances, returning this error will indicate to groupcache that the
-// value requested is not available, and it should NOT attempt to call `GetterFunc` locally.
-type ErrNotFound struct {
-	Msg string
+import (
+	"strings"
+)
+
+type MultiError struct {
+	errors []error
 }
 
-func (e *ErrNotFound) Error() string {
-	return e.Msg
+func (m *MultiError) Add(err error) {
+	if err != nil {
+		m.errors = append(m.errors, err)
+	}
 }
 
-func (e *ErrNotFound) Is(target error) bool {
-	_, ok := target.(*ErrNotFound)
-	return ok
+func (m *MultiError) Error() string {
+	if len(m.errors) == 0 {
+		return ""
+	}
+
+	var errStrings []string
+	for _, err := range m.errors {
+		errStrings = append(errStrings, err.Error())
+	}
+	return strings.Join(errStrings, "\n")
 }
 
-// ErrRemoteCall is returned from `group.Get()` when an error that is not a `ErrNotFound`
-// is returned during a remote HTTP instance call
-type ErrRemoteCall struct {
-	Msg string
-}
+func (m *MultiError) NilOrError() error {
+	if len(m.errors) == 0 {
+		return nil
+	}
 
-func (e *ErrRemoteCall) Error() string {
-	return e.Msg
-}
-
-func (e *ErrRemoteCall) Is(target error) bool {
-	_, ok := target.(*ErrRemoteCall)
-	return ok
+	return m
 }

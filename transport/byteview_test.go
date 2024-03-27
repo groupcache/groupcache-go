@@ -1,5 +1,6 @@
 /*
 Copyright 2012 Google Inc.
+Copyright 2024 Derrick J Wippler
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,19 +15,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package groupcache
+package transport_test
 
 import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"testing"
+
+	"github.com/groupcache/groupcache-go/v3/transport"
 )
 
 func TestByteView(t *testing.T) {
 	for _, s := range []string{"", "x", "yy"} {
-		for _, v := range []ByteView{of([]byte(s)), of(s)} {
+		for _, v := range []transport.ByteView{transport.ByteViewFrom([]byte(s)), transport.ByteViewFrom(s)} {
 			name := fmt.Sprintf("string %q, view %+v", s, v)
 			if v.Len() != len(s) {
 				t.Errorf("%s: Len = %d; want %d", name, v.Len(), len(s))
@@ -42,10 +44,10 @@ func TestByteView(t *testing.T) {
 			if n := v.Copy(shortDest[:]); n != min(len(s), 1) {
 				t.Errorf("%s: short Copy = %d; want %d", name, n, min(len(s), 1))
 			}
-			if got, err := ioutil.ReadAll(v.Reader()); err != nil || string(got) != s {
+			if got, err := io.ReadAll(v.Reader()); err != nil || string(got) != s {
 				t.Errorf("%s: Reader = %q, %v; want %q", name, got, err, s)
 			}
-			if got, err := ioutil.ReadAll(io.NewSectionReader(v, 0, int64(len(s)))); err != nil || string(got) != s {
+			if got, err := io.ReadAll(io.NewSectionReader(v, 0, int64(len(s)))); err != nil || string(got) != s {
 				t.Errorf("%s: SectionReader of ReaderAt = %q, %v; want %q", name, got, err, s)
 			}
 			var dest bytes.Buffer
@@ -54,14 +56,6 @@ func TestByteView(t *testing.T) {
 			}
 		}
 	}
-}
-
-// of returns a byte view of the []byte or string in x.
-func of(x interface{}) ByteView {
-	if bytes, ok := x.([]byte); ok {
-		return ByteView{b: bytes}
-	}
-	return ByteView{s: x.(string)}
 }
 
 func TestByteViewEqual(t *testing.T) {
@@ -84,7 +78,7 @@ func TestByteViewEqual(t *testing.T) {
 		{"x", []byte("yy"), false},
 	}
 	for i, tt := range tests {
-		va := of(tt.a)
+		va := transport.ByteViewFrom(tt.a)
 		if bytes, ok := tt.b.([]byte); ok {
 			if got := va.EqualBytes(bytes); got != tt.want {
 				t.Errorf("%d. EqualBytes = %v; want %v", i, got, tt.want)
@@ -94,7 +88,7 @@ func TestByteViewEqual(t *testing.T) {
 				t.Errorf("%d. EqualString = %v; want %v", i, got, tt.want)
 			}
 		}
-		if got := va.Equal(of(tt.b)); got != tt.want {
+		if got := va.Equal(transport.ByteViewFrom(tt.b)); got != tt.want {
 			t.Errorf("%d. Equal = %v; want %v", i, got, tt.want)
 		}
 	}
@@ -125,7 +119,7 @@ func TestByteViewSlice(t *testing.T) {
 		},
 	}
 	for i, tt := range tests {
-		for _, v := range []ByteView{of([]byte(tt.in)), of(tt.in)} {
+		for _, v := range []transport.ByteView{transport.ByteViewFrom([]byte(tt.in)), transport.ByteViewFrom(tt.in)} {
 			name := fmt.Sprintf("test %d, view %+v", i, v)
 			if tt.to != nil {
 				v = v.Slice(tt.from, tt.to.(int))
@@ -137,11 +131,4 @@ func TestByteViewSlice(t *testing.T) {
 			}
 		}
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
