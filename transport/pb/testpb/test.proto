@@ -17,6 +17,7 @@ limitations under the License.
 syntax = "proto2";
 
 package testpb;
+option go_package = "github.com/groupcache/groupcache-go/pb/testpb";
 
 message TestMessage {
   optional string name = 1;

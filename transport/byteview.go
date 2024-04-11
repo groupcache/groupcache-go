@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package groupcache
+package transport
 
 import (
 	"bytes"
@@ -37,7 +37,21 @@ type ByteView struct {
 	e time.Time
 }
 
-// Returns the expire time associated with this view
+func ByteViewFrom(x any) ByteView {
+	if b, ok := x.([]byte); ok {
+		return ByteView{b: b}
+	}
+	return ByteView{s: x.(string)}
+}
+
+func ByteViewWithExpire(b []byte, expire time.Time) ByteView {
+	return ByteView{
+		e: expire,
+		b: b,
+	}
+}
+
+// Expire returns the expiration time associated with this view
 func (v ByteView) Expire() time.Time {
 	return v.e
 }
