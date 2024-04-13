@@ -5,30 +5,6 @@ replacement for memcached in many cases.
 
 For API docs and examples, see http://godoc.org/github.com/groupcache/groupcache-go/v3
    
-### Modifications from original library
-* Support for explicit key removal from a group. `Remove()` requests are 
-  first sent to the peer who owns the key, then the remove request is 
-  forwarded to every peer in the groupcache. NOTE: This is a best case design
-  since it is possible a temporary network disruption could occur resulting
-  in remove requests never making it their peers. In practice this scenario
-  is very rare and the system remains very consistent. In case of an
-  inconsistency placing a expiration time on your values will ensure the 
-  cluster eventually becomes consistent again.
-* Support for expired values. `SetBytes()`, `SetProto()` and `SetString()` now
-  accept an optional `time.Time` which represents a time in the future when the
-  value will expire. If you don't want expiration, pass the zero value for
-  `time.Time` (for instance, `time.Time{}`). Expiration is handled by the LRU Cache
-  when a `Get()` on a key is requested. This means no network coordination of
-  expired values is needed. However, this DOES require that the clock on all nodes in the
-  cluster are synchronized for consistent expiration of values.
-* Now always populating the hotcache. A more complex algorithm is unnecessary
-  when the LRU cache will ensure the most used values remain in the cache. The
-  evict code ensures the hotcache never overcrowds the maincache.
-* Removed global state present in the original library to allow multiple groupcache 
-  instances to exist in code simultaneously.
-* Separated the HTTP transport code from the rest of the code base such that third-party
-  transports can be used without needing access to the internals of the library.
-* Updated dependencies and use modern golang programming and documentation practices
 
 ## Comparing Groupcache to memcached
 
@@ -221,6 +197,37 @@ func main() {
     defer func() { _ = server.Shutdown(context.Background()) }()
 }
 ```
+
+### Modifications from original library
+The original author of groupcache is [Brad Fitzpatrick](https://github.com/bradfitz) who is also the
+author of [memcached](https://memcached.org/). The original code repository for groupcache can be 
+found [here](https://github.com/golang/groupcache) and appears to be abandoned. We have taken the liberty 
+of modifying the library with additional features and fixing some deficiencies.
+
+* Support for explicit key removal from a group. `Remove()` requests are
+  first sent to the peer who owns the key, then the remove request is
+  forwarded to every peer in the groupcache. NOTE: This is a best case design
+  since it is possible a temporary network disruption could occur resulting
+  in remove requests never making it their peers. In practice this scenario
+  is very rare and the system remains very consistent. In case of an
+  inconsistency placing a expiration time on your values will ensure the
+  cluster eventually becomes consistent again.
+* Support for expired values. `SetBytes()`, `SetProto()` and `SetString()` now
+  accept an optional `time.Time` which represents a time in the future when the
+  value will expire. If you don't want expiration, pass the zero value for
+  `time.Time` (for instance, `time.Time{}`). Expiration is handled by the LRU Cache
+  when a `Get()` on a key is requested. This means no network coordination of
+  expired values is needed. However, this DOES require that the clock on all nodes in the
+  cluster are synchronized for consistent expiration of values.
+* Now always populating the hotcache. A more complex algorithm is unnecessary
+  when the LRU cache will ensure the most used values remain in the cache. The
+  evict code ensures the hotcache never overcrowds the maincache.
+* Removed global state present in the original library to allow multiple groupcache
+  instances to exist in code simultaneously.
+* Separated the HTTP transport code from the rest of the code base such that third-party
+  transports can be used without needing access to the internals of the library.
+* Updated dependencies and use modern golang programming and documentation practices
+* Added support for optional internal cache implementations.
 
 # Source Code Internals
 If you are reading this, you are likely in front of a Github page and are interested in building a custom transport

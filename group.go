@@ -69,7 +69,7 @@ type group struct {
 	// (amongst its peers) is authoritative. That is, this cache
 	// contains keys which consistent hash on to this process's
 	// peer number.
-	mainCache cache
+	mainCache Cache
 
 	// hotCache contains keys/values for which this peer is not
 	// authoritative (otherwise they would be in mainCache), but
@@ -79,7 +79,7 @@ type group struct {
 	// network card could become the bottleneck on a popular key.
 	// This cache is used sparingly to maximize the total number
 	// of key/value pairs that can be stored globally.
-	hotCache cache
+	hotCache Cache
 
 	// loadGroup ensures that each key is only fetched once
 	// (either locally or remotely), regardless of the number of
@@ -105,7 +105,7 @@ func (g *group) Name() string {
 
 // UsedBytes returns the total number of bytes used by the main and hot caches
 func (g *group) UsedBytes() (mainCache int64, hotCache int64) {
-	return g.mainCache.bytes(), g.hotCache.bytes()
+	return g.mainCache.Bytes(), g.hotCache.Bytes()
 }
 
 func (g *group) Get(ctx context.Context, key string, dest transport.Sink) error {
@@ -150,12 +150,12 @@ func (g *group) Set(ctx context.Context, key string, value []byte, expire time.T
 			// TODO(thrawn01): Not sure if this is useful outside of tests...
 			//  maybe we should ALWAYS update the local cache?
 			if hotCache {
-				g.localSet(key, value, expire, &g.hotCache)
+				g.localSet(key, value, expire, g.hotCache)
 			}
 			return nil, nil
 		}
 		// We own this key
-		g.localSet(key, value, expire, &g.mainCache)
+		g.localSet(key, value, expire, g.mainCache)
 		return nil, nil
 	})
 	return err
@@ -300,7 +300,7 @@ func (g *group) load(ctx context.Context, key string, dest transport.Sink) (valu
 		}
 		g.Stats.LocalLoads.Add(1)
 		destPopulated = true // only one caller of load gets this return value
-		g.populateCache(key, value, &g.mainCache)
+		g.populateCache(key, value, g.mainCache)
 		return value, nil
 	})
 	if err == nil {
@@ -336,7 +336,7 @@ func (g *group) getFromPeer(ctx context.Context, peer peer.Client, key string) (
 	value := transport.ByteViewWithExpire(res.Value, expire)
 
 	// Always populate the hot cache
-	g.populateCache(key, value, &g.hotCache)
+	g.populateCache(key, value, g.hotCache)
 	return value, nil
 }
 
@@ -366,19 +366,19 @@ func (g *group) lookupCache(key string) (value transport.ByteView, ok bool) {
 	if g.cacheBytes <= 0 {
 		return
 	}
-	value, ok = g.mainCache.get(key)
+	value, ok = g.mainCache.Get(key)
 	if ok {
 		return
 	}
-	value, ok = g.hotCache.get(key)
+	value, ok = g.hotCache.Get(key)
 	return
 }
 
 func (g *group) LocalSet(key string, value []byte, expire time.Time) {
-	g.localSet(key, value, expire, &g.mainCache)
+	g.localSet(key, value, expire, g.mainCache)
 }
 
-func (g *group) localSet(key string, value []byte, expire time.Time, cache *cache) {
+func (g *group) localSet(key string, value []byte, expire time.Time, cache Cache) {
 	if g.cacheBytes <= 0 {
 		return
 	}
@@ -399,34 +399,16 @@ func (g *group) LocalRemove(key string) {
 
 	// Ensure no requests are in flight
 	g.loadGroup.Lock(func() {
-		g.hotCache.remove(key)
-		g.mainCache.remove(key)
+		g.hotCache.Remove(key)
+		g.mainCache.Remove(key)
 	})
 }
 
-func (g *group) populateCache(key string, value transport.ByteView, cache *cache) {
+func (g *group) populateCache(key string, value transport.ByteView, cache Cache) {
 	if g.cacheBytes <= 0 {
 		return
 	}
-	cache.add(key, value)
-
-	// Evict items from cache(s) if necessary.
-	for {
-		mainBytes := g.mainCache.bytes()
-		hotBytes := g.hotCache.bytes()
-		if mainBytes+hotBytes <= g.cacheBytes {
-			return
-		}
-
-		// TODO(bradfitz): this is good-enough-for-now logic.
-		// It should be something based on measurements and/or
-		// respecting the costs of different resources.
-		victim := &g.mainCache
-		if hotBytes > mainBytes/8 {
-			victim = &g.hotCache
-		}
-		victim.removeOldest()
-	}
+	cache.Add(key, value)
 }
 
 // CacheType represents a type of cache.
@@ -447,9 +429,9 @@ const (
 func (g *group) CacheStats(which CacheType) CacheStats {
 	switch which {
 	case MainCache:
-		return g.mainCache.stats()
+		return g.mainCache.Stats()
 	case HotCache:
-		return g.hotCache.stats()
+		return g.hotCache.Stats()
 	default:
 		return CacheStats{}
 	}
@@ -459,6 +441,18 @@ func (g *group) CacheStats(which CacheType) CacheStats {
 // It is mostly intended for testing and is not thread safe.
 func (g *group) ResetCacheSize(maxBytes int64) {
 	g.cacheBytes = maxBytes
-	g.mainCache = cache{}
-	g.hotCache = cache{}
+	var (
+		hotCache  int64
+		mainCache int64
+	)
+
+	// Avoid divide by zero
+	if maxBytes >= 0 {
+		// Hot cache is one 8th the size of the main cache
+		hotCache = maxBytes / 8
+		mainCache = hotCache * 8
+	}
+
+	g.mainCache = g.instance.opts.CacheFactory(mainCache)
+	g.hotCache = g.instance.opts.CacheFactory(hotCache)
 }

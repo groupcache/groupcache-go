@@ -18,99 +18,138 @@ limitations under the License.
 package groupcache
 
 import (
-	"github.com/groupcache/groupcache-go/v3/transport"
 	"sync"
 	"time"
 
 	"github.com/groupcache/groupcache-go/v3/internal/lru"
+	"github.com/groupcache/groupcache-go/v3/transport"
 )
+
+// Cache is the interface a cache should implement
+type Cache interface {
+	// Get returns a ByteView from the cache
+	Get(string) (transport.ByteView, bool)
+	// Add adds a ByteView to the cache
+	Add(string, transport.ByteView)
+	// Stats returns stats about the current cache
+	Stats() CacheStats
+	// Remove removes a ByteView from the cache
+	Remove(string)
+	// Bytes returns the total number of bytes in the cache
+	Bytes() int64
+	// Close closes the cache. The implementation should shut down any
+	// background operations.
+	Close()
+}
 
 // nowFunc returns the current time which is used by the LRU to
 // determine if the value has expired. This can be overridden by
 // tests to ensure items are evicted when expired.
 var nowFunc lru.NowFunc = time.Now
 
-// cache is a wrapper around an *lru.Cache that adds synchronization,
-// makes values always be ByteView, and counts the size of all keys and
-// values.
-type cache struct {
-	mu         sync.RWMutex
-	nbytes     int64 // of all keys and values
-	lru        *lru.Cache
-	nhit, nget int64
-	nevict     int64 // number of evictions
+// mutexCache is a wrapper around an *lru.Cache that uses a mutex for
+// synchronization, makes values always be ByteView, counts the size
+// of all keys and values and automatically evicts them to keep the
+// cache under the requested bytes limit.
+type mutexCache struct {
+	mu                    sync.RWMutex
+	lru                   *lru.Cache
+	bytes                 int64 // total bytes of all keys and values
+	hits, gets, evictions int64
+	maxBytes              int64
 }
 
-func (c *cache) stats() CacheStats {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return CacheStats{
-		Bytes:     c.nbytes,
-		Items:     c.itemsLocked(),
-		Gets:      c.nget,
-		Hits:      c.nhit,
-		Evictions: c.nevict,
+// newMutexCache creates a new cache. If maxBytes == 0 then size of the cache is unbounded.
+func newMutexCache(maxBytes int64) *mutexCache {
+	return &mutexCache{
+		maxBytes: maxBytes,
 	}
 }
 
-func (c *cache) add(key string, value transport.ByteView) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.lru == nil {
-		c.lru = &lru.Cache{
+func (m *mutexCache) Stats() CacheStats {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return CacheStats{
+		Bytes:     m.bytes,
+		Items:     m.itemsLocked(),
+		Gets:      m.gets,
+		Hits:      m.hits,
+		Evictions: m.evictions,
+	}
+}
+
+func (m *mutexCache) Add(key string, value transport.ByteView) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.lru == nil {
+		m.lru = &lru.Cache{
 			Now: nowFunc,
 			OnEvicted: func(key lru.Key, value interface{}) {
 				val := value.(transport.ByteView)
-				c.nbytes -= int64(len(key.(string))) + int64(val.Len())
-				c.nevict++
+				m.bytes -= int64(len(key.(string))) + int64(val.Len())
+				m.evictions++
 			},
 		}
 	}
-	c.lru.Add(key, value, value.Expire())
-	c.nbytes += int64(len(key)) + int64(value.Len())
+	m.lru.Add(key, value, value.Expire())
+	m.bytes += int64(len(key)) + int64(value.Len())
+	m.removeOldest()
 }
 
-func (c *cache) get(key string) (value transport.ByteView, ok bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.nget++
-	if c.lru == nil {
+func (m *mutexCache) Get(key string) (value transport.ByteView, ok bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.gets++
+	if m.lru == nil {
 		return
 	}
-	vi, ok := c.lru.Get(key)
+	vi, ok := m.lru.Get(key)
 	if !ok {
 		return
 	}
-	c.nhit++
+	m.hits++
 	return vi.(transport.ByteView), true
 }
 
-func (c *cache) remove(key string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.lru == nil {
+func (m *mutexCache) Remove(key string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.lru == nil {
 		return
 	}
-	c.lru.Remove(key)
+	m.lru.Remove(key)
 }
 
-func (c *cache) removeOldest() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.lru != nil {
-		c.lru.RemoveOldest()
+func (m *mutexCache) Bytes() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.bytes
+}
+
+func (m *mutexCache) Close() {
+	// Do nothing
+}
+
+// removeOldest removes the oldest items in the cache until the number of bytes is
+// under the maxBytes limit. Must be called from a function which already maintains
+// a lock.
+func (m *mutexCache) removeOldest() {
+	if m.maxBytes == 0 {
+		return
+	}
+	for {
+		if m.bytes <= m.maxBytes {
+			return
+		}
+		if m.lru != nil {
+			m.lru.RemoveOldest()
+		}
 	}
 }
 
-func (c *cache) bytes() int64 {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.nbytes
-}
-
-func (c *cache) itemsLocked() int64 {
-	if c.lru == nil {
+func (m *mutexCache) itemsLocked() int64 {
+	if m.lru == nil {
 		return 0
 	}
-	return int64(c.lru.Len())
+	return int64(m.lru.Len())
 }
