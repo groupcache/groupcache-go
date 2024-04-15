@@ -75,7 +75,7 @@ type group struct {
 	// authoritative (otherwise they would be in mainCache), but
 	// are popular enough to warrant mirroring in this process to
 	// avoid going over the network to fetch from a peer.  Having
-	// a hotCache avoids network hotspotting, where a peer's
+	// a hotCache avoids network hot spotting, where a peer's
 	// network card could become the bottleneck on a popular key.
 	// This cache is used sparingly to maximize the total number
 	// of key/value pairs that can be stored globally.
@@ -448,9 +448,9 @@ func (g *group) ResetCacheSize(maxBytes int64) {
 
 	// Avoid divide by zero
 	if maxBytes >= 0 {
-		// Hot cache is one 8th the size of the main cache
+		// Hot cache is 1/8th the size of the main cache
 		hotCache = maxBytes / 8
-		mainCache = hotCache * 8
+		mainCache = hotCache * 7
 	}
 
 	g.mainCache = g.instance.opts.CacheFactory(mainCache)
