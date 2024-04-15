@@ -24,25 +24,6 @@ type OtterCache struct {
 }
 
 // NewOtterCache instantiates a new cache instance
-//
-// Due to the algorithm otter uses to evict and track cache item costs, it is recommended to
-// use a larger maximum byte size when creating Groups via Instance.NewGroup() when using
-// OtterCache if you expect your cached items to be very large. This is because groupcache
-// uses a "Main Cache" and a "Hot Cache" system where the "Hot Cache" is 1/8th the size of
-// the maximum bytes requested. Because Otter cache may reject items added to the cache
-// which are larger than 1/10th of the total capacity of the "Hot Cache" this may result in
-// a lower hit rate for the "Hot Cache" when storing large cache items and penalize the
-// efficiency of groupcache operation.
-//
-// For Example:
-// If you expect the average item in cache to be 100 bytes, and you create a Group with a cache size
-// of 100,000 bytes, then the main cache will be 87,500 bytes and the hot cache will be 12,500 bytes.
-// Since the largest possible item in otter cache is 1/10th of the total size of the cache. Then the
-// largest item that could possibly fit into the hot cache is 1,250 bytes. If you think any of the
-// items you store in groupcache could be larger than 1,250 bytes. Then you should increase the maximum
-// bytes in a Group to accommodate the maximum cache item. If you have no estimate of the maximum size
-// of items in the groupcache, then you should monitor the `Cache.Stats().Rejected` stat for the cache
-// in production and adjust the size accordingly.
 func NewOtterCache(maxBytes int64) (*OtterCache, error) {
 	o := &OtterCache{
 		Now: time.Now,

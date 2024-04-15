@@ -439,7 +439,7 @@ func (g *group) CacheStats(which CacheType) CacheStats {
 
 // ResetCacheSize changes the maxBytes allowed and resets both the main and hot caches.
 // It is mostly intended for testing and is not thread safe.
-func (g *group) ResetCacheSize(maxBytes int64) {
+func (g *group) ResetCacheSize(maxBytes int64) error {
 	g.cacheBytes = maxBytes
 	var (
 		hotCache  int64
@@ -453,6 +453,14 @@ func (g *group) ResetCacheSize(maxBytes int64) {
 		mainCache = hotCache * 7
 	}
 
-	g.mainCache = g.instance.opts.CacheFactory(mainCache)
-	g.hotCache = g.instance.opts.CacheFactory(hotCache)
+	var err error
+	g.mainCache, err = g.instance.opts.CacheFactory(mainCache)
+	if err != nil {
+		return fmt.Errorf("Options.CacheFactory(): %w", err)
+	}
+	g.hotCache, err = g.instance.opts.CacheFactory(hotCache)
+	if err != nil {
+		return fmt.Errorf("Options.CacheFactory(): %w", err)
+	}
+	return nil
 }

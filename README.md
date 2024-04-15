@@ -198,6 +198,42 @@ func main() {
 }
 ```
 
+### Otter Cache
+[Otter](https://maypok86.github.io/otter/) is a high performance lockless cache suitable for high concurrency environments
+where lock contention is an issue. Typically, servers with over 40 CPUs and lots of concurrent requests.
+
+```go
+// Create a new groupcache instance with a custom cache implementation
+instance := groupcache.New(groupcache.Options{
+    CacheFactory: func(maxBytes int64) (groupcache.Cache, error) {
+        return groupcache.NewOtterCache(maxBytes)
+    },
+    HashFn:    fnv1.HashBytes64,
+    Logger:    slog.Default(),
+    Transport: t,
+    Replicas:  50,
+})
+```
+
+#### Cache Size Implications
+Due to the algorithm Otter uses to evict and track cache item costs, it is recommended to
+use a larger maximum byte size when creating Groups via `Instance.NewGroup()` if you expect
+your cached items to be very large. This is because groupcache uses a "Main Cache" and a 
+"Hot Cache" system where the "Hot Cache" is 1/8th the size of the maximum bytes requested. 
+
+Because Otter cache may reject items added to the cache which are larger than 1/10th of the
+total capacity of the "Hot Cache" this may result in a lower hit rate for the "Hot Cache" when
+storing large cache items and will penalize the efficiency of groupcache operation.
+
+For example, If you expect the average item in cache to be 100 bytes, and you create a Group with a cache size
+of 100,000 bytes, then the main cache will be 87,500 bytes and the hot cache will be 12,500 bytes.
+Since the largest possible item in otter cache is 1/10th of the total size of the cache. Then the
+largest item that could possibly fit into the hot cache is 1,250 bytes. If you think any of the
+items you store in groupcache could be larger than 1,250 bytes. Then you should increase the maximum
+bytes in a Group to accommodate the maximum cache item. If you have no estimate of the maximum size
+of items in the groupcache, then you should monitor the `Cache.Stats().Rejected` stat for the cache
+in production and adjust the size accordingly.
+
 ### Modifications from original library
 The original author of groupcache is [Brad Fitzpatrick](https://github.com/bradfitz) who is also the
 author of [memcached](https://memcached.org/). The original code repository for groupcache can be 
@@ -256,6 +292,17 @@ listen for incoming requests.
 Holds the cache that makes up the "group" which can be shared with other instances of group cache. Each
 `groupcache.Instance` must create the same group using the same group name. Group names are how a "group" cache is
 accessed by other peers in the cluster.
+
+### groupcache.Cache
+Is the cache implementation used for both the "hot" and "main" caches. The "main cache" stores items the local
+group "owns" and the "hot cache" stores items this instance has retrieved from a remote peer. The "main cache" is
+7/8th the size of the max bytes requested when calling `Instance.NewGroup()`. The "hot cache" is 1/8th the size of 
+the "main cache".
+
+Third party cache implementations can be used by providing an `Options.CacheFactory` function which returns the
+third party initialized cache of the requested size. Groupcache includes an optional 
+[Otter](https://maypok86.github.io/otter/) cache implementation which provides high concurrency performance
+improvements. See the Otter section for details on usage.
 
 ### transport.Transport
 Is an interface which is used to communicate with other peers in the cluster. The groupcache project provides 

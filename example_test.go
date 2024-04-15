@@ -110,6 +110,9 @@ func ExampleNewHttpTransport() {
 
 	// Create a new groupcache instance
 	instance := groupcache.New(groupcache.Options{
+		CacheFactory: func(maxBytes int64) (groupcache.Cache, error) {
+			return groupcache.NewOtterCache(maxBytes)
+		},
 		HashFn:    fnv1.HashBytes64,
 		Logger:    slog.Default(),
 		Transport: t,

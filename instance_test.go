@@ -40,7 +40,7 @@ import (
 type TestGroup interface {
 	Get(ctx context.Context, key string, dest transport.Sink) error
 	CacheStats(which groupcache.CacheType) groupcache.CacheStats
-	ResetCacheSize(int64)
+	ResetCacheSize(int64) error
 }
 
 var (
@@ -297,7 +297,7 @@ func TestPeers(t *testing.T) {
 
 	resetCacheSize := func(maxBytes int64) {
 		for _, g := range groups {
-			g.ResetCacheSize(maxBytes)
+			_ = g.ResetCacheSize(maxBytes)
 		}
 	}
 

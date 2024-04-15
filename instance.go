@@ -61,7 +61,7 @@ type Options struct {
 
 	// CacheFactory returns a new instance of Cache which will be used by groupcache for both
 	// the main and hot cache.
-	CacheFactory func(maxBytes int64) Cache
+	CacheFactory func(maxBytes int64) (Cache, error)
 }
 
 // Instance of groupcache
@@ -75,8 +75,8 @@ type Instance struct {
 // New instantiates a new Instance of groupcache with the provided options
 func New(opts Options) *Instance {
 	if opts.CacheFactory == nil {
-		opts.CacheFactory = func(maxBytes int64) Cache {
-			return newMutexCache(maxBytes)
+		opts.CacheFactory = func(maxBytes int64) (Cache, error) {
+			return newMutexCache(maxBytes), nil
 		}
 	}
 
@@ -177,7 +177,9 @@ func (i *Instance) NewGroup(name string, cacheBytes int64, getter Getter) (Group
 		setGroup:    &singleflight.Group{},
 		removeGroup: &singleflight.Group{},
 	}
-	g.ResetCacheSize(cacheBytes)
+	if err := g.ResetCacheSize(cacheBytes); err != nil {
+		return nil, err
+	}
 	i.groups[name] = g
 	return g, nil
 }
