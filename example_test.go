@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/groupcache/groupcache-go/v3"
+	"github.com/groupcache/groupcache-go/v3/contrib"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
 	"github.com/segmentio/fasthash/fnv1"
@@ -36,7 +37,7 @@ func ExampleNew() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 
 	// Starts an instance of groupcache with the provided transport
-	d, err := groupcache.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{
+	d, err := groupcache.ListenAndServe(ctx, "192.168.1.1:8080", groupcache.Options{
 		// If transport is nil, defaults to HttpTransport
 		Transport: nil,
 		// The following are all optional
@@ -111,7 +112,7 @@ func ExampleNewHttpTransport() {
 	// Create a new groupcache instance
 	instance := groupcache.New(groupcache.Options{
 		CacheFactory: func(maxBytes int64) (groupcache.Cache, error) {
-			return groupcache.NewOtterCache(maxBytes)
+			return contrib.NewOtterCache(maxBytes)
 		},
 		HashFn:    fnv1.HashBytes64,
 		Logger:    slog.Default(),
@@ -138,7 +139,7 @@ func ExampleNewHttpTransport() {
 		log.Fatal(err)
 	}
 	// OR you can register a peer discovery mechanism
-	//d := discovery.SpawnK8s(discovery.K8sConfig{
+	//d := discovery.NewK8s(discovery.K8sConfig{
 	//	OnUpdate: instance.SetPeers,
 	//})
 	//defer d.Shutdown(context.Background())

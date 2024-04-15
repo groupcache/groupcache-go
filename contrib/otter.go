@@ -1,9 +1,10 @@
-package groupcache
+package contrib
 
 import (
 	"sync/atomic"
 	"time"
 
+	"github.com/groupcache/groupcache-go/v3"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/maypok86/otter"
 )
@@ -74,9 +75,9 @@ func (o *OtterCache) Remove(key string) {
 	o.cache.Delete(key)
 }
 
-func (o *OtterCache) Stats() CacheStats {
+func (o *OtterCache) Stats() groupcache.CacheStats {
 	s := o.cache.Stats()
-	return CacheStats{
+	return groupcache.CacheStats{
 		Bytes:     int64(o.cache.Capacity()),
 		Items:     int64(o.cache.Size()),
 		Rejected:  o.rejected.Load(),

@@ -1,18 +1,18 @@
-package groupcache_test
+package contrib_test
 
 import (
 	"crypto/rand"
 	"testing"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v3"
+	"github.com/groupcache/groupcache-go/v3/contrib"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestOtterCrud(t *testing.T) {
-	c, err := groupcache.NewOtterCache(20_000)
+	c, err := contrib.NewOtterCache(20_000)
 	require.NoError(t, err)
 
 	c.Add("key1", transport.ByteViewWithExpire([]byte("value1"), time.Time{}))
@@ -36,7 +36,7 @@ func TestOtterCrud(t *testing.T) {
 }
 
 func TestOtterEnsureUpdateExpiredValue(t *testing.T) {
-	c, err := groupcache.NewOtterCache(20_000)
+	c, err := contrib.NewOtterCache(20_000)
 	require.NoError(t, err)
 	curTime := time.Now()
 

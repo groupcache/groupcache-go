@@ -108,7 +108,7 @@ func StartWith(ctx context.Context, peers []peer.Info, opts groupcache.Options) 
 	}
 
 	for _, p := range peers {
-		d, err := groupcache.SpawnDaemon(ctx, p.Address, opts)
+		d, err := groupcache.ListenAndServe(ctx, p.Address, opts)
 		if err != nil {
 			return fmt.Errorf("StartWith: while starting daemon for '%s': %w", p.Address, err)
 		}

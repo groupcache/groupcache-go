@@ -67,9 +67,9 @@ func ExampleUsage() {
     ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
     defer cancel()
 
-    // SpawnDaemon is a convenience function which Starts an instance of groupcache 
+    // ListenAndServe is a convenience function which Starts an instance of groupcache 
     // with the provided transport and listens for groupcache HTTP requests on the address provided.
-    d, err := groupcache.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{})
+    d, err := groupcache.ListenAndServe(ctx, "192.168.1.1:8080", groupcache.Options{})
     if err != nil {
         log.Fatal("while starting server on 192.168.1.1:8080")
     }
@@ -203,10 +203,12 @@ func main() {
 where lock contention is an issue. Typically, servers with over 40 CPUs and lots of concurrent requests.
 
 ```go
+import "github.com/groupcache/groupcache-go/v3/contrib"
+
 // Create a new groupcache instance with a custom cache implementation
 instance := groupcache.New(groupcache.Options{
     CacheFactory: func(maxBytes int64) (groupcache.Cache, error) {
-        return groupcache.NewOtterCache(maxBytes)
+        return contrib.NewOtterCache(maxBytes)
     },
     HashFn:    fnv1.HashBytes64,
     Logger:    slog.Default(),
@@ -285,7 +287,7 @@ If `SetPeers()` is not called, then the `groupcache.Instance` will operate as a 
 
 ### groupcache.Daemon
 This is a convenience struct which encapsulates a `groupcache.Instance` to simplify starting and stopping an instance and
-the associated transport. Calling `groupcache.SpawnDaemon()` calls `Transport.SpawnTransport()` on the provided transport to
+the associated transport. Calling `groupcache.ListenAndServe()` calls `Transport.ListenAndServe()` on the provided transport to
 listen for incoming requests.
 
 ### groupcache.Group
@@ -310,8 +312,8 @@ Is an interface which is used to communicate with other peers in the cluster. Th
 must implement the `transport.Transport` and `peer.Client` interfaces. The `transport.Transport` implementation can
 then be passed into the `groupcache.New()` method to register the transport. The `peer.Client` implementation is used
 by `groupcache.Instance` and `peer.Picker` to communicate with other `groupcache.Instance` in the cluster using the
-server started by the transport when `Transport.SpawnServer()` is called. It is the responsibility of the caller to 
-ensure `Transport.SpawnServer()` is called successfully, else the `groupcache.Instance` will not be able to receive
+server started by the transport when `Transport.ListenAndServe()` is called. It is the responsibility of the caller to 
+ensure `Transport.ListenAndServe()` is called successfully, else the `groupcache.Instance` will not be able to receive
 any remote calls from peers in the cluster.
 
 ### transport.Sink
@@ -330,7 +332,7 @@ which peer in the cluster is our instance, `Instance.SetPeers()` will return an 
 `IsSelf` is not set to `true`.
 
 ### cluster package
-Is a convenience package containing functions to easily spawn and shutdown a cluster of groupcache instances 
+Is a convenience package containing functions to easily create and shutdown a cluster of groupcache instances 
 (called daemons).
 
 **Start()** and **StartWith()** starts a local cluster of groupcache daemons suitable for testing. Users who wish to

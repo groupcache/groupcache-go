@@ -51,7 +51,7 @@ func TestHttpTransport(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
-	// SpawnDaemon a cluster of 4 groupcache instances with HTTP Transport
+	// ListenAndServe a cluster of 4 groupcache instances with HTTP Transport
 	require.NoError(t, cluster.Start(ctx, 4, groupcache.Options{
 		Transport: transport.NewHttpTransport(transport.HttpTransportOptions{
 			Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
