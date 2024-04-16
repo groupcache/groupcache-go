@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/groupcache/groupcache-go/v3"
-	"github.com/groupcache/groupcache-go/v3/contrib"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
 	"github.com/segmentio/fasthash/fnv1"
@@ -111,9 +110,6 @@ func ExampleNewHttpTransport() {
 
 	// Create a new groupcache instance
 	instance := groupcache.New(groupcache.Options{
-		CacheFactory: func(maxBytes int64) (groupcache.Cache, error) {
-			return contrib.NewOtterCache(maxBytes)
-		},
 		HashFn:    fnv1.HashBytes64,
 		Logger:    slog.Default(),
 		Transport: t,
