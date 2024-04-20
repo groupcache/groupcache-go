@@ -5,30 +5,6 @@ replacement for memcached in many cases.
 
 For API docs and examples, see http://godoc.org/github.com/groupcache/groupcache-go/v3
    
-### Modifications from original library
-* Support for explicit key removal from a group. `Remove()` requests are 
-  first sent to the peer who owns the key, then the remove request is 
-  forwarded to every peer in the groupcache. NOTE: This is a best case design
-  since it is possible a temporary network disruption could occur resulting
-  in remove requests never making it their peers. In practice this scenario
-  is very rare and the system remains very consistent. In case of an
-  inconsistency placing a expiration time on your values will ensure the 
-  cluster eventually becomes consistent again.
-* Support for expired values. `SetBytes()`, `SetProto()` and `SetString()` now
-  accept an optional `time.Time` which represents a time in the future when the
-  value will expire. If you don't want expiration, pass the zero value for
-  `time.Time` (for instance, `time.Time{}`). Expiration is handled by the LRU Cache
-  when a `Get()` on a key is requested. This means no network coordination of
-  expired values is needed. However, this DOES require that the clock on all nodes in the
-  cluster are synchronized for consistent expiration of values.
-* Now always populating the hotcache. A more complex algorithm is unnecessary
-  when the LRU cache will ensure the most used values remain in the cache. The
-  evict code ensures the hotcache never overcrowds the maincache.
-* Removed global state present in the original library to allow multiple groupcache 
-  instances to exist in code simultaneously.
-* Separated the HTTP transport code from the rest of the code base such that third-party
-  transports can be used without needing access to the internals of the library.
-* Updated dependencies and use modern golang programming and documentation practices
 
 ## Comparing Groupcache to memcached
 
@@ -91,9 +67,9 @@ func ExampleUsage() {
     ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
     defer cancel()
 
-    // SpawnDaemon is a convenience function which Starts an instance of groupcache 
+    // ListenAndServe is a convenience function which Starts an instance of groupcache 
     // with the provided transport and listens for groupcache HTTP requests on the address provided.
-    d, err := groupcache.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{})
+    d, err := groupcache.ListenAndServe(ctx, "192.168.1.1:8080", groupcache.Options{})
     if err != nil {
         log.Fatal("while starting server on 192.168.1.1:8080")
     }
@@ -222,6 +198,75 @@ func main() {
 }
 ```
 
+### Otter Cache
+[Otter](https://maypok86.github.io/otter/) is a high performance lockless cache suitable for high concurrency environments
+where lock contention is an issue. Typically, servers with over 40 CPUs and lots of concurrent requests.
+
+```go
+import "github.com/groupcache/groupcache-go/v3/contrib"
+
+// Create a new groupcache instance with a custom cache implementation
+instance := groupcache.New(groupcache.Options{
+    CacheFactory: func(maxBytes int64) (groupcache.Cache, error) {
+        return contrib.NewOtterCache(maxBytes)
+    },
+    HashFn:    fnv1.HashBytes64,
+    Logger:    slog.Default(),
+    Transport: t,
+    Replicas:  50,
+})
+```
+
+#### Cache Size Implications
+Due to the algorithm Otter uses to evict and track cache item costs, it is recommended to
+use a larger maximum byte size when creating Groups via `Instance.NewGroup()` if you expect
+your cached items to be very large. This is because groupcache uses a "Main Cache" and a 
+"Hot Cache" system where the "Hot Cache" is 1/8th the size of the maximum bytes requested. 
+
+Because Otter cache may reject items added to the cache which are larger than 1/10th of the
+total capacity of the "Hot Cache" this may result in a lower hit rate for the "Hot Cache" when
+storing large cache items and will penalize the efficiency of groupcache operation.
+
+For example, If you expect the average item in cache to be 100 bytes, and you create a Group with a cache size
+of 100,000 bytes, then the main cache will be 87,500 bytes and the hot cache will be 12,500 bytes.
+Since the largest possible item in otter cache is 1/10th of the total size of the cache. Then the
+largest item that could possibly fit into the hot cache is 1,250 bytes. If you think any of the
+items you store in groupcache could be larger than 1,250 bytes. Then you should increase the maximum
+bytes in a Group to accommodate the maximum cache item. If you have no estimate of the maximum size
+of items in the groupcache, then you should monitor the `Cache.Stats().Rejected` stat for the cache
+in production and adjust the size accordingly.
+
+### Modifications from original library
+The original author of groupcache is [Brad Fitzpatrick](https://github.com/bradfitz) who is also the
+author of [memcached](https://memcached.org/). The original code repository for groupcache can be 
+found [here](https://github.com/golang/groupcache) and appears to be abandoned. We have taken the liberty 
+of modifying the library with additional features and fixing some deficiencies.
+
+* Support for explicit key removal from a group. `Remove()` requests are
+  first sent to the peer who owns the key, then the remove request is
+  forwarded to every peer in the groupcache. NOTE: This is a best case design
+  since it is possible a temporary network disruption could occur resulting
+  in remove requests never making it their peers. In practice this scenario
+  is very rare and the system remains very consistent. In case of an
+  inconsistency placing a expiration time on your values will ensure the
+  cluster eventually becomes consistent again.
+* Support for expired values. `SetBytes()`, `SetProto()` and `SetString()` now
+  accept an optional `time.Time` which represents a time in the future when the
+  value will expire. If you don't want expiration, pass the zero value for
+  `time.Time` (for instance, `time.Time{}`). Expiration is handled by the LRU Cache
+  when a `Get()` on a key is requested. This means no network coordination of
+  expired values is needed. However, this DOES require that the clock on all nodes in the
+  cluster are synchronized for consistent expiration of values.
+* Now always populating the hotcache. A more complex algorithm is unnecessary
+  when the LRU cache will ensure the most used values remain in the cache. The
+  evict code ensures the hotcache never overcrowds the maincache.
+* Removed global state present in the original library to allow multiple groupcache
+  instances to exist in code simultaneously.
+* Separated the HTTP transport code from the rest of the code base such that third-party
+  transports can be used without needing access to the internals of the library.
+* Updated dependencies and use modern golang programming and documentation practices
+* Added support for optional internal cache implementations.
+
 # Source Code Internals
 If you are reading this, you are likely in front of a Github page and are interested in building a custom transport
 or creating a Pull Request. In which case, the following explains the most of the important structs and how they 
@@ -242,7 +287,7 @@ If `SetPeers()` is not called, then the `groupcache.Instance` will operate as a 
 
 ### groupcache.Daemon
 This is a convenience struct which encapsulates a `groupcache.Instance` to simplify starting and stopping an instance and
-the associated transport. Calling `groupcache.SpawnDaemon()` calls `Transport.SpawnTransport()` on the provided transport to
+the associated transport. Calling `groupcache.ListenAndServe()` calls `Transport.ListenAndServe()` on the provided transport to
 listen for incoming requests.
 
 ### groupcache.Group
@@ -250,14 +295,25 @@ Holds the cache that makes up the "group" which can be shared with other instanc
 `groupcache.Instance` must create the same group using the same group name. Group names are how a "group" cache is
 accessed by other peers in the cluster.
 
+### groupcache.Cache
+Is the cache implementation used for both the "hot" and "main" caches. The "main cache" stores items the local
+group "owns" and the "hot cache" stores items this instance has retrieved from a remote peer. The "main cache" is
+7/8th the size of the max bytes requested when calling `Instance.NewGroup()`. The "hot cache" is 1/8th the size of 
+the "main cache".
+
+Third party cache implementations can be used by providing an `Options.CacheFactory` function which returns the
+third party initialized cache of the requested size. Groupcache includes an optional 
+[Otter](https://maypok86.github.io/otter/) cache implementation which provides high concurrency performance
+improvements. See the Otter section for details on usage.
+
 ### transport.Transport
 Is an interface which is used to communicate with other peers in the cluster. The groupcache project provides 
 `transport.HttpTransport` which is used by groupcache when no other custom transport is provided. Custom transports
 must implement the `transport.Transport` and `peer.Client` interfaces. The `transport.Transport` implementation can
 then be passed into the `groupcache.New()` method to register the transport. The `peer.Client` implementation is used
 by `groupcache.Instance` and `peer.Picker` to communicate with other `groupcache.Instance` in the cluster using the
-server started by the transport when `Transport.SpawnServer()` is called. It is the responsibility of the caller to 
-ensure `Transport.SpawnServer()` is called successfully, else the `groupcache.Instance` will not be able to receive
+server started by the transport when `Transport.ListenAndServe()` is called. It is the responsibility of the caller to 
+ensure `Transport.ListenAndServe()` is called successfully, else the `groupcache.Instance` will not be able to receive
 any remote calls from peers in the cluster.
 
 ### transport.Sink
@@ -276,7 +332,7 @@ which peer in the cluster is our instance, `Instance.SetPeers()` will return an 
 `IsSelf` is not set to `true`.
 
 ### cluster package
-Is a convenience package containing functions to easily spawn and shutdown a cluster of groupcache instances 
+Is a convenience package containing functions to easily create and shutdown a cluster of groupcache instances 
 (called daemons).
 
 **Start()** and **StartWith()** starts a local cluster of groupcache daemons suitable for testing. Users who wish to

@@ -58,6 +58,10 @@ type Options struct {
 	// Transport is the transport groupcache will use to communicate with peers in the cluster
 	// Default is transport.HttpTransport
 	Transport transport.Transport
+
+	// CacheFactory returns a new instance of Cache which will be used by groupcache for both
+	// the main and hot cache.
+	CacheFactory func(maxBytes int64) (Cache, error)
 }
 
 // Instance of groupcache
@@ -70,17 +74,23 @@ type Instance struct {
 
 // New instantiates a new Instance of groupcache with the provided options
 func New(opts Options) *Instance {
-	i := &Instance{
-		groups: make(map[string]*group),
-		opts:   opts,
+	if opts.CacheFactory == nil {
+		opts.CacheFactory = func(maxBytes int64) (Cache, error) {
+			return newMutexCache(maxBytes), nil
+		}
 	}
 
 	if opts.Transport == nil {
 		opts.Transport = transport.NewHttpTransport(transport.HttpTransportOptions{})
 	}
 
+	i := &Instance{
+		groups: make(map[string]*group),
+		opts:   opts,
+	}
+
 	// Register our instance with the transport
-	opts.Transport.Register(i)
+	i.opts.Transport.Register(i)
 
 	// Create a new peer picker using the provided opts
 	i.picker = peer.NewPicker(peer.Options{
@@ -166,6 +176,9 @@ func (i *Instance) NewGroup(name string, cacheBytes int64, getter Getter) (Group
 		loadGroup:   &singleflight.Group{},
 		setGroup:    &singleflight.Group{},
 		removeGroup: &singleflight.Group{},
+	}
+	if err := g.ResetCacheSize(cacheBytes); err != nil {
+		return nil, err
 	}
 	i.groups[name] = g
 	return g, nil

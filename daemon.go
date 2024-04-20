@@ -24,15 +24,15 @@ import (
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
 )
 
-// Daemon is an instance of groupcache
+// Daemon is an instance of groupcache bound to a port listening for requests
 type Daemon struct {
 	instance *Instance
 	opts     Options
 	address  string
 }
 
-// SpawnDaemon starts a new instance of daemon with the config provided
-func SpawnDaemon(ctx context.Context, address string, opts Options) (*Daemon, error) {
+// ListenAndServe creates a new instance of groupcache listening on the address provided
+func ListenAndServe(ctx context.Context, address string, opts Options) (*Daemon, error) {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
@@ -51,7 +51,7 @@ func SpawnDaemon(ctx context.Context, address string, opts Options) (*Daemon, er
 
 func (d *Daemon) Start(ctx context.Context) error {
 	d.instance = New(d.opts)
-	return d.opts.Transport.SpawnServer(ctx, d.address)
+	return d.opts.Transport.ListenAndServe(ctx, d.address)
 }
 
 // NewGroup is a convenience method which calls NewGroup on the instance associated with this daemon.
@@ -106,5 +106,5 @@ func (d *Daemon) ListenAddress() string {
 
 // Shutdown attempts a clean shutdown of the daemon and all related resources.
 func (d *Daemon) Shutdown(ctx context.Context) error {
-	return d.opts.Transport.ShutdownServer(ctx)
+	return d.opts.Transport.Shutdown(ctx)
 }

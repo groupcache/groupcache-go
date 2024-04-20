@@ -46,10 +46,18 @@ func (i *AtomicInt) String() string {
 
 // CacheStats are returned by stats accessors on Group.
 type CacheStats struct {
-	Bytes     int64
-	Items     int64
-	Gets      int64
-	Hits      int64
+	// Rejected is a counter of the total number of items that were not added to
+	// the cache due to some consideration of the underlying cache implementation.
+	Rejected int64
+	// Bytes is a gauge of how many bytes are in the cache
+	Bytes int64
+	// Items is a gauge of how many items are in the cache
+	Items int64
+	// Gets reports the total get requests
+	Gets int64
+	// Hits reports the total successful cache hits
+	Hits int64
+	// Evictions reports the total number of evictions
 	Evictions int64
 }
 

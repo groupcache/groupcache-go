@@ -36,7 +36,7 @@ func ExampleNew() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 
 	// Starts an instance of groupcache with the provided transport
-	d, err := groupcache.SpawnDaemon(ctx, "192.168.1.1:8080", groupcache.Options{
+	d, err := groupcache.ListenAndServe(ctx, "192.168.1.1:8080", groupcache.Options{
 		// If transport is nil, defaults to HttpTransport
 		Transport: nil,
 		// The following are all optional
@@ -135,7 +135,7 @@ func ExampleNewHttpTransport() {
 		log.Fatal(err)
 	}
 	// OR you can register a peer discovery mechanism
-	//d := discovery.SpawnK8s(discovery.K8sConfig{
+	//d := discovery.NewK8s(discovery.K8sConfig{
 	//	OnUpdate: instance.SetPeers,
 	//})
 	//defer d.Shutdown(context.Background())

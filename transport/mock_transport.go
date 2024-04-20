@@ -67,14 +67,14 @@ func (t *MockTransport) ListenAddress() string {
 	return t.address
 }
 
-func (t *MockTransport) SpawnServer(_ context.Context, address string) error {
+func (t *MockTransport) ListenAndServe(_ context.Context, address string) error {
 	t.parent.instances[address] = t.register
 	t.parent.transports[address] = t
 	t.address = address
 	return nil
 }
 
-func (t *MockTransport) ShutdownServer(_ context.Context) error {
+func (t *MockTransport) Shutdown(_ context.Context) error {
 	delete(t.parent.instances, t.address)
 	delete(t.parent.transports, t.address)
 	return nil

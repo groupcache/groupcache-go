@@ -75,15 +75,15 @@ type Transport interface {
 	// called.
 	NewClient(ctx context.Context, peer peer.Info) (peer.Client, error)
 
-	// SpawnServer spawns a server that will handle incoming requests for this transport
+	// ListenAndServe spawns a server that will handle incoming requests for this transport
 	// This is used by daemon and cluster packages to create a cluster of instances using
 	// this specific transport.
-	SpawnServer(ctx context.Context, address string) error
+	ListenAndServe(ctx context.Context, address string) error
 
-	// ShutdownServer shuts down the server started when calling SpawnServer()
-	ShutdownServer(ctx context.Context) error
+	// Shutdown shuts down the server started when calling ListenAndServe()
+	Shutdown(ctx context.Context) error
 
-	// ListenAddress returns the address the server is listening on after calling SpawnServer().
+	// ListenAddress returns the address the server is listening on after calling ListenAndServe().
 	ListenAddress() string
 }
 
@@ -166,8 +166,8 @@ func (t *HttpTransport) New() Transport {
 	return NewHttpTransport(t.opts)
 }
 
-// SpawnServer starts a new http server listening on the provided address:port
-func (t *HttpTransport) SpawnServer(ctx context.Context, address string) error {
+// ListenAndServe starts a new http server listening on the provided address:port
+func (t *HttpTransport) ListenAndServe(ctx context.Context, address string) error {
 	mux := http.NewServeMux()
 	mux.Handle(t.opts.BasePath, t)
 
@@ -196,8 +196,8 @@ func (t *HttpTransport) SpawnServer(ctx context.Context, address string) error {
 	return waitForConnect(ctx, t.listener.Addr().String(), nil)
 }
 
-// ShutdownServer shuts down the server started when calling SpawnServer()
-func (t *HttpTransport) ShutdownServer(ctx context.Context) error {
+// Shutdown shuts down the server started when calling ListenAndServe()
+func (t *HttpTransport) Shutdown(ctx context.Context) error {
 	if err := t.server.Shutdown(ctx); err != nil {
 		return err
 	}
@@ -205,12 +205,12 @@ func (t *HttpTransport) ShutdownServer(ctx context.Context) error {
 	return nil
 }
 
-// ListenAddress returns the address the server is listening on after calling SpawnServer().
+// ListenAddress returns the address the server is listening on after calling ListenAndServe().
 func (t *HttpTransport) ListenAddress() string {
 	return t.listener.Addr().String()
 }
 
-// ServeHTTP handles all incoming HTTP requests received by the server spawned by SpawnServer()
+// ServeHTTP handles all incoming HTTP requests received by the server spawned by ListenAndServe()
 func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if t.instance == nil {
 		panic("groupcache instance is nil; you must register an instance by calling HttpTransport.Register()")
