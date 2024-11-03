@@ -1,11 +1,14 @@
 module github.com/groupcache/groupcache-go/v3
 
-go 1.21
+go 1.21.7
+
+toolchain go1.23.1
 
 require (
+	github.com/kapetan-io/tackle v0.10.0
 	github.com/maypok86/otter v1.2.0
 	github.com/segmentio/fasthash v1.0.3
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.9.0
 	golang.org/x/net v0.22.0
 	google.golang.org/protobuf v1.28.1
 )

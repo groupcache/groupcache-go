@@ -33,8 +33,7 @@ func TestStartMultipleInstances(t *testing.T) {
 
 	assert.Equal(t, 2, len(cluster.ListPeers()))
 	assert.Equal(t, 2, len(cluster.ListDaemons()))
-	err = cluster.Shutdown(context.Background())
-	require.NoError(t, err)
+	require.NoError(t, cluster.Shutdown(context.Background()))
 }
 
 func TestRestart(t *testing.T) {
@@ -45,8 +44,7 @@ func TestRestart(t *testing.T) {
 	assert.Equal(t, 2, len(cluster.ListDaemons()))
 	err = cluster.Restart(context.Background())
 	require.NoError(t, err)
-	err = cluster.Shutdown(context.Background())
-	require.NoError(t, err)
+	require.NoError(t, cluster.Shutdown(context.Background()))
 }
 
 func TestStartOneInstance(t *testing.T) {
@@ -55,8 +53,7 @@ func TestStartOneInstance(t *testing.T) {
 
 	assert.Equal(t, 1, len(cluster.ListPeers()))
 	assert.Equal(t, 1, len(cluster.ListDaemons()))
-	err = cluster.Shutdown(context.Background())
-	require.NoError(t, err)
+	require.NoError(t, cluster.Shutdown(context.Background()))
 }
 
 func TestStartMultipleDaemons(t *testing.T) {
@@ -74,8 +71,7 @@ func TestStartMultipleDaemons(t *testing.T) {
 	assert.Contains(t, daemons[1].ListenAddress(), ":2222")
 	assert.Contains(t, cluster.DaemonAt(0).ListenAddress(), ":1111")
 	assert.Contains(t, cluster.DaemonAt(1).ListenAddress(), ":2222")
-	err = cluster.Shutdown(context.Background())
-	require.NoError(t, err)
+	require.NoError(t, cluster.Shutdown(context.Background()))
 }
 
 func TestStartWithInvalidPeer(t *testing.T) {
@@ -83,4 +79,5 @@ func TestStartWithInvalidPeer(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, cluster.ListPeers())
 	assert.Nil(t, cluster.ListDaemons())
+	require.NoError(t, cluster.Shutdown(context.Background()))
 }

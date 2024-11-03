@@ -62,7 +62,7 @@ func main() {
 	defer cancel()
 	err := i.SetPeers(ctx, peers)
 	if err != nil {
-		log.Fatalf(err.Error())
+		log.Fatal(err.Error())
 	}
 
 	group, err := i.NewGroup("cache1", 64<<20, groupcache.GetterFunc(
@@ -81,7 +81,7 @@ func main() {
 		},
 	))
 	if err != nil {
-		log.Fatalf(err.Error())
+		log.Fatal(err.Error())
 	}
 
 	mux := http.NewServeMux()

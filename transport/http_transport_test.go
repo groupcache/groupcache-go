@@ -57,19 +57,17 @@ func TestHttpTransport(t *testing.T) {
 			Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}),
 	}))
+	defer func() { _ = cluster.Shutdown(context.Background()) }()
 
-	newGetter := func(idx int) groupcache.Getter {
-		return groupcache.GetterFunc(func(ctx context.Context, key string, dest transport.Sink) error {
-			if _, err := http.Get(ts.URL); err != nil {
-				t.Logf("HTTP request from getter failed with '%s'", err)
-			}
-			return dest.SetString(strconv.Itoa(idx)+":"+key, time.Time{})
-		})
-	}
-
-	// Create a group for each instance in the cluster
+	// Create a group on each instance in the cluster
 	for idx, d := range cluster.ListDaemons() {
-		_, err := d.GetInstance().NewGroup(groupName, 1<<20, newGetter(idx))
+		_, err := d.GetInstance().NewGroup(groupName, 1<<20,
+			groupcache.GetterFunc(func(ctx context.Context, key string, dest transport.Sink) error {
+				if _, err := http.Get(ts.URL); err != nil {
+					t.Logf("HTTP request from getter failed with '%s'", err)
+				}
+				return dest.SetString(strconv.Itoa(idx)+":"+key, time.Time{})
+			}))
 		require.NoError(t, err)
 	}
 
