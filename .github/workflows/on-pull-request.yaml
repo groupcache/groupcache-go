@@ -27,16 +27,17 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go-version }}
+          cache: true # caching and restoring go modules and build outputs
 
       - run: go env
 
       - name: Cache deps
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-
+            ${{ runner.os }}-go--
 
       - name: go mod tidy
         run: go mod tidy && git diff --exit-code
@@ -44,8 +45,8 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.56.2
-          skip-cache: true
+          version: v1.61.0
+          skip-cache: true  # cache/restore is done by actions/setup-go@v3 step
           args: -v
 
       - name: Install deps
