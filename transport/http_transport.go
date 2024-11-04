@@ -502,16 +502,7 @@ func waitForConnect(ctx context.Context, address string, cfg *tls.Config) error 
 			errs = append(errs, ctx.Err().Error())
 			return errors.New(strings.Join(errs, "\n"))
 		}
-		wait(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 100)
 		continue
 	}
-}
-
-func wait(duration time.Duration) {
-	stopCh := make(chan struct{}, 1)
-	timer := time.AfterFunc(duration, func() {
-		stopCh <- struct{}{}
-	})
-	<-stopCh
-	timer.Stop()
 }
