@@ -1,54 +1,47 @@
-# groupcache
 
-groupcache is a caching and cache-filling library, intended as a
-replacement for memcached in many cases.
+<h2 align="center">
+<img src="docs/groupcache-logo.png" alt="GroupCache Logo" width="800" /><br />
+Distributed Cache Library
+</h2>
 
-For API docs and examples, see http://godoc.org/github.com/groupcache/groupcache-go/v3
-   
+---
 
-## Comparing Groupcache to memcached
+[![CI](https://github.com/groupcache/groupcache-go/workflows/CI/badge.svg)](https://github.com/groupcache/groupcache-go/actions?query=workflow:"CI")
+[![GitHub tag](https://img.shields.io/github/tag/groupcache/groupcache-go?include_prereleases=&sort=semver&color=blue)](https://github.com/groupcache/groupcache-go/releases/)
+[![License](https://img.shields.io/badge/License-Apache-blue)](#license)
 
-### **Like memcached**, groupcache:
+Groupcache is a Go-based caching and cache-filling library designed to replace traditional caching solutions
+like MEMCACHED and REDIS in many scenarios.
 
- * shards by key to select which peer is responsible for that key
+## Why Use Groupcache?
+- Cost Reduction: Eliminates the need for external system dependencies and additional server infrastructure
+- Increased efficiency: Minimizes network calls to external systems and data sources
+- Load Protection: Prevents the thundering herd problem through the use of `singleflight` synchronization
 
-### **Unlike memcached**, groupcache:
+## How It Works
+Groupcache functions as an in-memory read-through cache with the following workflow:
+- When your application requests data, Groupcache uses key sharding to determine key ownership
+- For locally-owned keys:
+    - If the key exists in the local cache, data is returned immediately
+    - If the key is missing, Groupcache retrieves it from the data source, caches it, and returns it
+    - Future requests for the same key are served directly from the hot cache
+- For keys owned by other peers:
+    - Groupcache forwards the request to the appropriate peer instance
+    - The owning peer handles the cache lookup and retrieval process
 
- * does not require running a separate set of servers, thus massively
-   reducing deployment/configuration pain.  groupcache is a client
-   library as well as a server.  It connects to its own peers.
+This architecture provides the following benefits:
+- Network efficiency by avoiding requests for locally-owned keys
+- Load protection by channeling identical key requests to a single Groupcache instance within the cluster
+- Avoid unnecessary network calls to external cache systems by using local memory for the cache
 
- * comes with a cache filling mechanism.  Whereas memcached just says
-   "Sorry, cache miss", often resulting in a thundering herd of
-   database (or whatever) loads from an unbounded number of clients
-   (which has resulted in several fun outages), groupcache coordinates
-   cache fills such that only one load in one process of an entire
-   replicated set of processes populates the cache, then multiplexes
-   the loaded value to all callers.
+Thanks to `singleflight` synchronization, even if your application makes millions of requests for a 
+specific key (e.g., "FOO"), Groupcache will only query the underlying data source once.
 
- * does not support versioned values.  If key "foo" is value "bar",
-   key "foo" must always be "bar".
+<div align="center">
+<img src="docs/simplified-diagram.png" alt="Simplified Diagram" width="500" /><br />
+</div>
 
-## Loading process
-
-In a nutshell, a groupcache lookup of **Get("foo")** looks like:
-
-(On machine #5 of a set of N machines running the same code)
-
- 1. Is the value of "foo" in local memory because it's super hot?  If so, use it.
-
- 2. Is the value of "foo" in local memory because peer #5 (the current
-    peer) is the owner of it?  If so, use it.
-
- 3. Amongst all the peers in my set of N, am I the owner of the key
-    "foo"?  (e.g. does it consistent hash to 5?)  If so, load it and 
-    store in the local cache..  If other callers come in, via the same 
-    process or via RPC requests from peers, they block waiting for the load 
-    to finish and get the same answer.  If not, RPC to the peer that's the 
-    owner and get the answer.  If the RPC fails, just load it locally (still with
-    local dup suppression).
-
-## Example
+## Usage
 
 ```go
 import (
@@ -138,8 +131,38 @@ func ExampleUsage() {
     d.Shutdown(ctx)
 }
 ```
+# Concepts
+### Groups
+GroupCache provides functionality to create multiple distinct "groups" through its `NewGroup()` function. 
+Each group serves as a separate namespace or storage pool that is distributed across peers using consistent hashing.
+You should create a new group whenever you need to prevent key conflicts between similar or identical key spaces.
 
-# HTTP integration
+### GetterFunc
+When creating a new group with `NewGroup()`, you must provide a `groupcache.GetterFunc`. This function serves as the
+read-through mechanism for retrieving cache values that aren't present in the local cache. The function works in
+conjunction with `singleflight` to ensure that only one request for a specific key is processed at a time. Any 
+additional requests for the same key will wait until the initial `groupcache.GetterFunc` call completes. Given 
+this behavior, it's crucial to utilize the provided `context.Context` to properly handle timeouts and cancellations.
+
+### The Cache Loading process
+In a nutshell, a groupcache lookup of **Get("foo")** looks like:
+
+(On machine #5 of a set of N machines running the same code)
+
+1. Is the value of FOO in local cache because it's super hot?  If so, use it.
+2. Is the value of FOO in local memory because peer #5 (the current
+   peer) is the owner of it?  If so, use it.
+3. Amongst all the peers in my set of N, am I the owner of the key
+   FOO?  (e.g. does it consistent hash to 5?)  If so, load it and
+   store in the local cache.  If other callers come in, via the same
+   process or via RPC requests from peers, they block waiting for the load
+   to finish and get the same answer.  If not, RPC to the peer that's the
+   owner and get the answer.  If the RPC fails, just load it locally (still with
+   local dup suppression).
+
+<img src="docs/sequence-diagram.svg" alt="Simplified Diagram" width="800" /><br />
+
+# Integrating GroupCache with HTTP Services
 This is a quick guide on how to use groupcache in a service that is already listening for HTTP requests. In some
 circumstances you may want to have groupcache respond using the same HTTP port that non groupcache requests are
 received through. In this case you must explicitly create the `transport.HttpTransport` which can then be passed
@@ -198,9 +221,31 @@ func main() {
 }
 ```
 
-### Otter Cache
+# Comparing Groupcache to memcached
+
+### **Like memcached**, groupcache:
+* shards by key to select which peer is responsible for that key
+
+### **Unlike memcached**, groupcache:
+* does not require running a separate set of servers, thus massively
+  reducing deployment/configuration pain.  groupcache is a client
+  library as well as a server.  It connects to its own peers.
+* comes with a cache filling mechanism.  Whereas memcached just says
+  "Sorry, cache miss", often resulting in a thundering herd of
+  database (or whatever) loads from an unbounded number of clients
+  (which has resulted in several fun outages), groupcache coordinates
+  cache fills such that only one load in one process of an entire
+  replicated set of processes populates the cache, then multiplexes
+  the loaded value to all callers.
+* does not support versioned values.  If key "foo" is value "bar",
+  key "foo" must always be "bar".
+
+# Pluggable Internal Cache
+GroupCache supports replacing the default LRU cache implementation with alternative implementations.
+
 [Otter](https://maypok86.github.io/otter/) is a high performance lockless cache suitable for high concurrency environments
-where lock contention is an issue. Typically, servers with over 40 CPUs and lots of concurrent requests.
+where lock contention is an issue. Typically, servers with over 40 CPUs and lots of concurrent requests would benefit
+from using an alternate cache implementation like Otter.
 
 ```go
 import "github.com/groupcache/groupcache-go/v3/contrib"
@@ -217,11 +262,11 @@ instance := groupcache.New(groupcache.Options{
 })
 ```
 
-#### Cache Size Implications
+#### Cache Size Implications for Otter
 Due to the algorithm Otter uses to evict and track cache item costs, it is recommended to
 use a larger maximum byte size when creating Groups via `Instance.NewGroup()` if you expect
-your cached items to be very large. This is because groupcache uses a "Main Cache" and a 
-"Hot Cache" system where the "Hot Cache" is 1/8th the size of the maximum bytes requested. 
+your cached items to be very large. This is because groupcache uses a "Main Cache" and a
+"Hot Cache" system where the "Hot Cache" is 1/8th the size of the maximum bytes requested.
 
 Because Otter cache may reject items added to the cache which are larger than 1/10th of the
 total capacity of the "Hot Cache" this may result in a lower hit rate for the "Hot Cache" when
@@ -236,10 +281,16 @@ bytes in a Group to accommodate the maximum cache item. If you have no estimate 
 of items in the groupcache, then you should monitor the `Cache.Stats().Rejected` stat for the cache
 in production and adjust the size accordingly.
 
+
+# Source Code Internals
+If you are reading this, you are likely in front of a Github page and are interested in building a custom transport
+or creating a Pull Request. In which case, the following explains the most of the important structs and how they 
+interact with each other.
+
 ### Modifications from original library
 The original author of groupcache is [Brad Fitzpatrick](https://github.com/bradfitz) who is also the
-author of [memcached](https://memcached.org/). The original code repository for groupcache can be 
-found [here](https://github.com/golang/groupcache) and appears to be abandoned. We have taken the liberty 
+author of [memcached](https://memcached.org/). The original code repository for groupcache can be
+found [here](https://github.com/golang/groupcache) and appears to be abandoned. We have taken the liberty
 of modifying the library with additional features and fixing some deficiencies.
 
 * Support for explicit key removal from a group. `Remove()` requests are
@@ -266,11 +317,7 @@ of modifying the library with additional features and fixing some deficiencies.
   transports can be used without needing access to the internals of the library.
 * Updated dependencies and use modern golang programming and documentation practices
 * Added support for optional internal cache implementations.
-
-# Source Code Internals
-If you are reading this, you are likely in front of a Github page and are interested in building a custom transport
-or creating a Pull Request. In which case, the following explains the most of the important structs and how they 
-interact with each other.
+* Many other code improvements
 
 ### groupcache.Instance
 Represents an instance of groupcache. With the instance, you can create new groups and add other instances to your 
@@ -346,4 +393,3 @@ defer cluster.Shutdown(context.Background())
 
 ### Code Map
 ![docs/code-diagram.png](docs/code-diagram.png)
-

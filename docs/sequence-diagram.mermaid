@@ -1,0 +1,35 @@
+---
+theme: base
+look: handDrawn
+---
+sequenceDiagram
+participant App
+participant LocalGroupCache
+participant PeerGroupCache
+participant DataSource
+
+App->>LocalGroupCache: Request FOO
+alt FOO owned by LocalGroupcache
+    alt FOO found in LocalGroupcache
+        LocalGroupCache->>App: Return cached data
+    else FOO not found in LocalGroupcache
+        LocalGroupCache->>DataSource: Fetch data
+        DataSource->>LocalGroupCache: Return data
+        LocalGroupCache->>LocalGroupCache: Store in Main cache
+        LocalGroupCache->>App: Return data
+    else FOO owned by PeerGroupCache
+        LocalGroupCache->>PeerGroupCache: Request FOO from peer
+        alt FOO found in PeerGroupCache
+            PeerGroupCache->>LocalGroupCache: Return cached data
+            LocalGroupCache->>LocalGroupCache: Store data in Hot cache
+            LocalGroupCache->>App: Return cached data
+        else FOO not found in PeerGroupCache
+            PeerGroupCache->>DataSource: Fetch data
+            DataSource->>PeerGroupCache: Return data
+            PeerGroupCache->>PeerGroupCache: Store in Local cache
+            PeerGroupCache->>LocalGroupCache: Return data
+            LocalGroupCache->>LocalGroupCache: Store in Hot cache
+            LocalGroupCache->>App: Return data
+        end
+    end
+end
