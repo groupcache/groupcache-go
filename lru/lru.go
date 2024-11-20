@@ -32,7 +32,7 @@ type Cache struct {
 
 	// OnEvicted optionally specifies a callback function to be
 	// executed when an entry is purged from the cache.
-	OnEvicted func(key Key, value interface{})
+	OnEvicted func(key Key, value interface{}, expired bool)
 
 	// Now is the Now() function the cache will use to determine
 	// the current time which is used to calculate expired values
@@ -73,7 +73,8 @@ func (c *Cache) Add(key Key, value interface{}, expire time.Time) {
 	if ee, ok := c.cache[key]; ok {
 		eee := ee.Value.(*entry)
 		if c.OnEvicted != nil {
-			c.OnEvicted(key, eee.value)
+			expired := hasExpired(eee, c.Now())
+			c.OnEvicted(key, eee.value, expired)
 		}
 		c.ll.MoveToFront(ee)
 		eee.expire = expire
@@ -95,7 +96,7 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 	if ele, hit := c.cache[key]; hit {
 		entry := ele.Value.(*entry)
 		// If the entry has expired, remove it from the cache
-		if !entry.expire.IsZero() && entry.expire.Before(c.Now()) {
+		if expired := hasExpired(entry, c.Now()); expired {
 			c.removeElement(ele)
 			return nil, false
 		}
@@ -104,6 +105,10 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 		return entry.value, true
 	}
 	return
+}
+
+func hasExpired(entry *entry, now time.Time) bool {
+	return !entry.expire.IsZero() && entry.expire.Before(now)
 }
 
 // Remove removes the provided key from the cache.
@@ -132,7 +137,8 @@ func (c *Cache) removeElement(e *list.Element) {
 	kv := e.Value.(*entry)
 	delete(c.cache, kv.key)
 	if c.OnEvicted != nil {
-		c.OnEvicted(kv.key, kv.value)
+		expired := hasExpired(kv, c.Now())
+		c.OnEvicted(kv.key, kv.value, expired)
 	}
 }
 
@@ -149,7 +155,8 @@ func (c *Cache) Clear() {
 	if c.OnEvicted != nil {
 		for _, e := range c.cache {
 			kv := e.Value.(*entry)
-			c.OnEvicted(kv.key, kv.value)
+			expired := hasExpired(kv, c.Now())
+			c.OnEvicted(kv.key, kv.value, expired)
 		}
 	}
 	c.ll = nil

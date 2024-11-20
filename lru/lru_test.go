@@ -49,10 +49,12 @@ var getTests = []struct {
 func TestAdd_evictsOldAndReplaces(t *testing.T) {
 	var evictedKey Key
 	var evictedValue interface{}
+	var evictedExpired bool
 	lru := New(0)
-	lru.OnEvicted = func(key Key, value interface{}) {
+	lru.OnEvicted = func(key Key, value interface{}, expired bool) {
 		evictedKey = key
 		evictedValue = value
+		evictedExpired = expired
 	}
 	lru.Add("myKey", 1234, time.Time{})
 	lru.Add("myKey", 1235, time.Time{})
@@ -69,6 +71,9 @@ func TestAdd_evictsOldAndReplaces(t *testing.T) {
 	}
 	if evictedValue != 1234 {
 		t.Fatalf("%s: evictedValue = %v; want %v", t.Name(), evictedValue, 1234)
+	}
+	if evictedExpired {
+		t.Fatalf("%s: evictedExpired = %t; want %t", t.Name(), evictedExpired, false)
 	}
 }
 
@@ -102,8 +107,12 @@ func TestRemove(t *testing.T) {
 
 func TestEvict(t *testing.T) {
 	evictedKeys := make([]Key, 0)
-	onEvictedFun := func(key Key, value interface{}) {
+	var countExpired int
+	onEvictedFun := func(key Key, value interface{}, expired bool) {
 		evictedKeys = append(evictedKeys, key)
+		if expired {
+			countExpired++
+		}
 	}
 
 	lru := New(20)
@@ -121,6 +130,9 @@ func TestEvict(t *testing.T) {
 	if evictedKeys[1] != Key("myKey1") {
 		t.Fatalf("got %v in second evicted key; want %s", evictedKeys[1], "myKey1")
 	}
+	if countExpired != 0 {
+		t.Fatalf("evicted %d expired keys", countExpired)
+	}
 }
 
 func TestExpire(t *testing.T) {
@@ -135,8 +147,15 @@ func TestExpire(t *testing.T) {
 		{"expired", "expiredKey", false, time.Millisecond * 100, time.Millisecond * 150},
 	}
 
+	var countExpired int
+
 	for _, tt := range tests {
 		lru := New(0)
+		lru.OnEvicted = func(key Key, value interface{}, expired bool) {
+			if expired {
+				countExpired++
+			}
+		}
 		lru.Add(tt.key, 1234, time.Now().Add(tt.expire))
 		time.Sleep(tt.wait)
 		val, ok := lru.Get(tt.key)
@@ -145,5 +164,9 @@ func TestExpire(t *testing.T) {
 		} else if ok && val != 1234 {
 			t.Fatalf("%s expected get to return 1234 but got %v", tt.name, val)
 		}
+	}
+
+	if countExpired != 1 {
+		t.Fatalf("evicted %d expired keys, but expected 1", countExpired)
 	}
 }

@@ -633,22 +633,24 @@ var NowFunc lru.NowFunc = time.Now
 // makes values always be ByteView, and counts the size of all keys and
 // values.
 type cache struct {
-	mu         sync.RWMutex
-	nbytes     int64 // of all keys and values
-	lru        *lru.Cache
-	nhit, nget int64
-	nevict     int64 // number of evictions
+	mu               sync.RWMutex
+	nbytes           int64 // of all keys and values
+	lru              *lru.Cache
+	nhit, nget       int64
+	nevict           int64 // number of evictions
+	nevictNonExpired int64 // number of non-expired evictions
 }
 
 func (c *cache) stats() CacheStats {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return CacheStats{
-		Bytes:     c.nbytes,
-		Items:     c.itemsLocked(),
-		Gets:      c.nget,
-		Hits:      c.nhit,
-		Evictions: c.nevict,
+		Bytes:               c.nbytes,
+		Items:               c.itemsLocked(),
+		Gets:                c.nget,
+		Hits:                c.nhit,
+		Evictions:           c.nevict,
+		EvictionsNonExpired: c.nevictNonExpired,
 	}
 }
 
@@ -658,10 +660,13 @@ func (c *cache) add(key string, value ByteView) {
 	if c.lru == nil {
 		c.lru = &lru.Cache{
 			Now: NowFunc,
-			OnEvicted: func(key lru.Key, value interface{}) {
+			OnEvicted: func(key lru.Key, value interface{}, expired bool) {
 				val := value.(ByteView)
 				c.nbytes -= int64(len(key.(string))) + int64(val.Len())
 				c.nevict++
+				if !expired {
+					c.nevictNonExpired++
+				}
 			},
 		}
 	}
@@ -744,9 +749,10 @@ func (i *AtomicInt) String() string {
 
 // CacheStats are returned by stats accessors on Group.
 type CacheStats struct {
-	Bytes     int64
-	Items     int64
-	Gets      int64
-	Hits      int64
-	Evictions int64
+	Bytes               int64
+	Items               int64
+	Gets                int64
+	Hits                int64
+	Evictions           int64
+	EvictionsNonExpired int64
 }
