@@ -108,7 +108,8 @@ func TestHTTPPool(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	g := NewGroupWithWorkspace(DefaultWorkspace, "httpPoolTest", 1<<20, getter)
+	const purgeExpired = true
+	g := NewGroupWithWorkspace(DefaultWorkspace, "httpPoolTest", purgeExpired, 1<<20, getter)
 
 	for _, key := range testKeys(nGets) {
 		var value string
@@ -242,7 +243,8 @@ func beChildForTestHTTPPool(t *testing.T) {
 		dest.SetString(strconv.Itoa(*peerIndex)+":"+key, time.Time{})
 		return nil
 	})
-	NewGroupWithWorkspace(DefaultWorkspace, "httpPoolTest", 1<<20, getter)
+	const purgeExpired = true
+	NewGroupWithWorkspace(DefaultWorkspace, "httpPoolTest", purgeExpired, 1<<20, getter)
 
 	log.Fatal(http.ListenAndServe(addrs[*peerIndex], p))
 }

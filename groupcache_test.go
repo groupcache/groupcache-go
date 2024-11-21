@@ -59,7 +59,8 @@ const (
 )
 
 func testSetup() {
-	stringGroup = NewGroupWithWorkspace(DefaultWorkspace, stringGroupName, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
+	const purgeExpired = true
+	stringGroup = NewGroupWithWorkspace(DefaultWorkspace, stringGroupName, purgeExpired, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
 		if key == fromChan {
 			key = <-stringc
 		}
@@ -67,7 +68,7 @@ func testSetup() {
 		return dest.SetString("ECHO:"+key, time.Time{})
 	}))
 
-	protoGroup = NewGroupWithWorkspace(DefaultWorkspace, protoGroupName, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
+	protoGroup = NewGroupWithWorkspace(DefaultWorkspace, protoGroupName, purgeExpired, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
 		if key == fromChan {
 			key = <-stringc
 		}
@@ -78,7 +79,7 @@ func testSetup() {
 		}, time.Time{})
 	}))
 
-	expireGroup = NewGroupWithWorkspace(DefaultWorkspace, expireGroupName, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
+	expireGroup = NewGroupWithWorkspace(DefaultWorkspace, expireGroupName, purgeExpired, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
 		cacheFills.Add(1)
 		return dest.SetString("ECHO:"+key, time.Now().Add(time.Millisecond*100))
 	}))
@@ -310,7 +311,8 @@ func TestPeers(t *testing.T) {
 		localHits++
 		return dest.SetString("got:"+key, time.Time{})
 	}
-	testGroup := newGroup(DefaultWorkspace, "TestPeers-group", cacheSize, GetterFunc(getter), peerList)
+	const purgeExpired = true
+	testGroup := newGroup(DefaultWorkspace, "TestPeers-group", purgeExpired, cacheSize, GetterFunc(getter), peerList)
 	run := func(name string, n int, wantSummary string) {
 		// Reset counters
 		localHits = 0
@@ -438,7 +440,8 @@ func (g *orderedFlightGroup) Lock(fn func()) {
 func TestNoDedup(t *testing.T) {
 	const testkey = "testkey"
 	const testval = "testval"
-	g := newGroup(DefaultWorkspace, "testgroup", 1024, GetterFunc(func(_ context.Context, key string, dest Sink) error {
+	const purgeExpired = true
+	g := newGroup(DefaultWorkspace, "testgroup", purgeExpired, 1024, GetterFunc(func(_ context.Context, key string, dest Sink) error {
 		return dest.SetString(testval, time.Time{})
 	}), nil)
 
@@ -522,7 +525,9 @@ func TestContextDeadlineOnPeer(t *testing.T) {
 	getter := func(_ context.Context, key string, dest Sink) error {
 		return dest.SetString("got:"+key, time.Time{})
 	}
-	testGroup := newGroup(DefaultWorkspace, "TestContextDeadlineOnPeer-group", cacheSize, GetterFunc(getter), peerList)
+	const purgeExpired = true
+	testGroup := newGroup(DefaultWorkspace, "TestContextDeadlineOnPeer-group",
+		purgeExpired, cacheSize, GetterFunc(getter), peerList)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*300)
 	defer cancel()

@@ -17,7 +17,9 @@ import (
 
 var store = map[string]string{}
 
-var group = groupcache.NewGroupWithWorkspace(groupcache.DefaultWorkspace, "cache1", 64<<20, groupcache.GetterFunc(
+const purgeExpired = true
+
+var group = groupcache.NewGroupWithWorkspace(groupcache.DefaultWorkspace, "cache1", purgeExpired, 64<<20, groupcache.GetterFunc(
 	func(ctx context.Context, key string, dest groupcache.Sink) error {
 		fmt.Printf("Get Called\n")
 		v, ok := store[key]
@@ -35,13 +37,14 @@ var group = groupcache.NewGroupWithWorkspace(groupcache.DefaultWorkspace, "cache
 ))
 
 func main() {
+	serverURL := flag.String("server-url", "http://localhost:8080", "server url")
 	addr := flag.String("addr", ":8080", "server address")
 	addr2 := flag.String("api-addr", ":8081", "api server address")
-	peers := flag.String("pool", "http://localhost:8080", "server pool list")
+	peers := flag.String("pool", *serverURL, "comma-separated server pool list")
 	flag.Parse()
 
 	p := strings.Split(*peers, ",")
-	pool := groupcache.NewHTTPPoolOptsWithWorkspace(groupcache.DefaultWorkspace, fmt.Sprintf("http://%s", *addr), &groupcache.HTTPPoolOptions{})
+	pool := groupcache.NewHTTPPoolOptsWithWorkspace(groupcache.DefaultWorkspace, *serverURL, &groupcache.HTTPPoolOptions{})
 	pool.Set(p...)
 
 	http.HandleFunc("/set", func(w http.ResponseWriter, r *http.Request) {

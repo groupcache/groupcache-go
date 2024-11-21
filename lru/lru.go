@@ -39,6 +39,10 @@ type Cache struct {
 	// Defaults to time.Now()
 	Now NowFunc
 
+	// PurgeExpired enables removing all expired keys when the
+	// oldest item is removed.
+	PurgeExpired bool
+
 	ll    *list.List
 	cache map[interface{}]*list.Element
 }
@@ -126,8 +130,31 @@ func (c *Cache) RemoveOldest() {
 	if c.cache == nil {
 		return
 	}
+
+	// remove oldest item
 	ele := c.ll.Back()
-	if ele != nil {
+	if ele == nil {
+		return
+	}
+	c.removeElement(ele)
+
+	if c.PurgeExpired {
+		c.removeAllExpired()
+	}
+}
+
+// removeAllExpired removes all expired items from the cache.
+func (c *Cache) removeAllExpired() {
+	now := c.Now()
+	for {
+		ele := c.ll.Back()
+		if ele == nil {
+			break
+		}
+		entry := ele.Value.(*entry)
+		if expired := hasExpired(entry, now); !expired {
+			break
+		}
 		c.removeElement(ele)
 	}
 }

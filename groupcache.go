@@ -94,8 +94,8 @@ func GetGroup(name string) *Group {
 // completes.
 //
 // The group name must be unique for each getter.
-func NewGroupWithWorkspace(ws *Workspace, name string, cacheBytes int64, getter Getter) *Group {
-	return newGroup(ws, name, cacheBytes, getter, nil)
+func NewGroupWithWorkspace(ws *Workspace, name string, purgeExpired bool, cacheBytes int64, getter Getter) *Group {
+	return newGroup(ws, name, purgeExpired, cacheBytes, getter, nil)
 }
 
 /*
@@ -128,7 +128,7 @@ func DeregisterGroup(name string) {
 */
 
 // If peers is nil, the peerPicker is called via a sync.Once to initialize it.
-func newGroup(ws *Workspace, name string, cacheBytes int64, getter Getter, peers PeerPicker) *Group {
+func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes int64, getter Getter, peers PeerPicker) *Group {
 	if getter == nil {
 		panic("nil Getter")
 	}
@@ -148,6 +148,8 @@ func newGroup(ws *Workspace, name string, cacheBytes int64, getter Getter, peers
 		setGroup:    &singleflight.Group{},
 		removeGroup: &singleflight.Group{},
 	}
+	g.mainCache.purgeExpired = purgeExpired
+	g.hotCache.purgeExpired = purgeExpired
 	if fn := ws.newGroupHook; fn != nil {
 		fn(g)
 	}
@@ -639,6 +641,7 @@ type cache struct {
 	nhit, nget       int64
 	nevict           int64 // number of evictions
 	nevictNonExpired int64 // number of non-expired evictions
+	purgeExpired     bool
 }
 
 func (c *cache) stats() CacheStats {
@@ -668,6 +671,7 @@ func (c *cache) add(key string, value ByteView) {
 					c.nevictNonExpired++
 				}
 			},
+			PurgeExpired: c.purgeExpired,
 		}
 	}
 	c.lru.Add(key, value, value.Expire())

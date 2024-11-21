@@ -170,3 +170,25 @@ func TestExpire(t *testing.T) {
 		t.Fatalf("evicted %d expired keys, but expected 1", countExpired)
 	}
 }
+
+func TestPurge(t *testing.T) {
+	lru := New(0)
+	lru.Add("key1", 1, time.Now().Add(50*time.Millisecond))
+	lru.Add("key2", 2, time.Now().Add(100*time.Millisecond))
+	lru.Add("key3", 3, time.Now().Add(200*time.Millisecond))
+	lru.Add("key4", 4, time.Now().Add(500*time.Millisecond))
+	if lru.Len() != 4 {
+		t.Fatalf("cache size %d, but expected 4", lru.Len())
+	}
+	time.Sleep(250 * time.Millisecond)
+	lru.PurgeExpired = false
+	lru.RemoveOldest()
+	if lru.Len() != 3 {
+		t.Fatalf("cache size %d, but expected 3", lru.Len())
+	}
+	lru.PurgeExpired = true
+	lru.RemoveOldest()
+	if lru.Len() != 1 {
+		t.Fatalf("cache size %d, but expected 1", lru.Len())
+	}
+}
