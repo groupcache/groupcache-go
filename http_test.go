@@ -270,7 +270,7 @@ func addrToURL(addr []string) []string {
 	return url
 }
 
-func awaitAddrReady(t *testing.T, addr string, wg *sync.WaitGroup) {
+func awaitAddrReady(_ /*t*/ *testing.T, addr string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	const max = 1 * time.Second
 	tries := 0

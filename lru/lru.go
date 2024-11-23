@@ -32,7 +32,7 @@ type Cache struct {
 
 	// OnEvicted optionally specifies a callback function to be
 	// executed when an entry is purged from the cache.
-	OnEvicted func(key Key, value interface{}, expired bool)
+	OnEvicted func(key Key, value interface{}, nonExpiredAndMemFull bool)
 
 	// Now is the Now() function the cache will use to determine
 	// the current time which is used to calculate expired values
@@ -77,8 +77,8 @@ func (c *Cache) Add(key Key, value interface{}, expire time.Time) {
 	if ee, ok := c.cache[key]; ok {
 		eee := ee.Value.(*entry)
 		if c.OnEvicted != nil {
-			expired := hasExpired(eee, c.Now())
-			c.OnEvicted(key, eee.value, expired)
+			const nonExpiredAndMemFull = false // not a mem full condition
+			c.OnEvicted(key, eee.value, nonExpiredAndMemFull)
 		}
 		c.ll.MoveToFront(ee)
 		eee.expire = expire
@@ -88,7 +88,7 @@ func (c *Cache) Add(key Key, value interface{}, expire time.Time) {
 	ele := c.ll.PushFront(&entry{key, value, expire})
 	c.cache[key] = ele
 	if c.MaxEntries != 0 && c.ll.Len() > c.MaxEntries {
-		c.RemoveOldest()
+		c.RemoveOldest() // RemoveOldest is used on mem full condition.
 	}
 }
 
@@ -101,7 +101,8 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 		entry := ele.Value.(*entry)
 		// If the entry has expired, remove it from the cache
 		if expired := hasExpired(entry, c.Now()); expired {
-			c.removeElement(ele)
+			const memFull = false
+			c.removeElement(ele, memFull)
 			return nil, false
 		}
 
@@ -121,11 +122,13 @@ func (c *Cache) Remove(key Key) {
 		return
 	}
 	if ele, hit := c.cache[key]; hit {
-		c.removeElement(ele)
+		const memFull = false // memFull is used in stats for evictions
+		c.removeElement(ele, memFull)
 	}
 }
 
 // RemoveOldest removes the oldest item from the cache.
+// RemoveOldest is used on mem full condition.
 func (c *Cache) RemoveOldest() {
 	if c.cache == nil {
 		return
@@ -136,7 +139,8 @@ func (c *Cache) RemoveOldest() {
 	if ele == nil {
 		return
 	}
-	c.removeElement(ele)
+	const memFull = true
+	c.removeElement(ele, memFull)
 
 	if c.PurgeExpired {
 		c.removeAllExpired()
@@ -144,6 +148,7 @@ func (c *Cache) RemoveOldest() {
 }
 
 // removeAllExpired removes all expired items from the cache.
+// removeAllExpired is used on mem full condition.
 func (c *Cache) removeAllExpired() {
 	now := c.Now()
 	for {
@@ -155,17 +160,18 @@ func (c *Cache) removeAllExpired() {
 		if expired := hasExpired(entry, now); !expired {
 			break
 		}
-		c.removeElement(ele)
+		const memFull = true
+		c.removeElement(ele, memFull)
 	}
 }
 
-func (c *Cache) removeElement(e *list.Element) {
+func (c *Cache) removeElement(e *list.Element, memFull bool) {
 	c.ll.Remove(e)
 	kv := e.Value.(*entry)
 	delete(c.cache, kv.key)
 	if c.OnEvicted != nil {
-		expired := hasExpired(kv, c.Now())
-		c.OnEvicted(kv.key, kv.value, expired)
+		nonExpiredAndMemFull := memFull && !hasExpired(kv, c.Now())
+		c.OnEvicted(kv.key, kv.value, nonExpiredAndMemFull)
 	}
 }
 
@@ -182,8 +188,8 @@ func (c *Cache) Clear() {
 	if c.OnEvicted != nil {
 		for _, e := range c.cache {
 			kv := e.Value.(*entry)
-			expired := hasExpired(kv, c.Now())
-			c.OnEvicted(kv.key, kv.value, expired)
+			const nonExpiredAndMemFull = false // not a mem full condition
+			c.OnEvicted(kv.key, kv.value, nonExpiredAndMemFull)
 		}
 	}
 	c.ll = nil

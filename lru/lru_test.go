@@ -107,11 +107,11 @@ func TestRemove(t *testing.T) {
 
 func TestEvict(t *testing.T) {
 	evictedKeys := make([]Key, 0)
-	var countExpired int
-	onEvictedFun := func(key Key, value interface{}, expired bool) {
+	var countNonExpiredAndMemFull int
+	onEvictedFun := func(key Key, value interface{}, nonExpiredAndMemFull bool) {
 		evictedKeys = append(evictedKeys, key)
-		if expired {
-			countExpired++
+		if nonExpiredAndMemFull {
+			countNonExpiredAndMemFull++
 		}
 	}
 
@@ -130,8 +130,9 @@ func TestEvict(t *testing.T) {
 	if evictedKeys[1] != Key("myKey1") {
 		t.Fatalf("got %v in second evicted key; want %s", evictedKeys[1], "myKey1")
 	}
-	if countExpired != 0 {
-		t.Fatalf("evicted %d expired keys", countExpired)
+	if countNonExpiredAndMemFull != 2 {
+		t.Fatalf("evicted %d non-expired keys due to mem full, but expected 2",
+			countNonExpiredAndMemFull)
 	}
 }
 
@@ -147,13 +148,13 @@ func TestExpire(t *testing.T) {
 		{"expired", "expiredKey", false, time.Millisecond * 100, time.Millisecond * 150},
 	}
 
-	var countExpired int
+	var countNonExpiredAndMemFull int
 
 	for _, tt := range tests {
 		lru := New(0)
-		lru.OnEvicted = func(key Key, value interface{}, expired bool) {
-			if expired {
-				countExpired++
+		lru.OnEvicted = func(key Key, value interface{}, nonExpiredAndMemFull bool) {
+			if nonExpiredAndMemFull {
+				countNonExpiredAndMemFull++
 			}
 		}
 		lru.Add(tt.key, 1234, time.Now().Add(tt.expire))
@@ -166,13 +167,109 @@ func TestExpire(t *testing.T) {
 		}
 	}
 
-	if countExpired != 1 {
-		t.Fatalf("evicted %d expired keys, but expected 1", countExpired)
+	if countNonExpiredAndMemFull != 0 {
+		t.Fatalf("evicted %d non-expired keys due to mem full, but expected 0",
+			countNonExpiredAndMemFull)
 	}
+}
+
+func TestEvictNonExpired(t *testing.T) {
+	const maxKeys = 4
+	lru := New(maxKeys)
+	var countNonExpiredAndMemFull int
+	var evictions int
+	lru.OnEvicted = func(key Key, value interface{}, nonExpiredAndMemFull bool) {
+		evictions++
+		if nonExpiredAndMemFull {
+			countNonExpiredAndMemFull++
+		}
+	}
+	lru.Add("key1", 1, time.Now().Add(100*time.Millisecond))
+	lru.Add("key1", 1, time.Now().Add(100*time.Millisecond))
+
+	// no expired key, 1 eviction, 0 mem full
+
+	if lru.Len() != 1 {
+		t.Fatalf("cache size %d, but expected 1", lru.Len())
+	}
+	if evictions != 1 {
+		t.Fatalf("evictions %d, but expected 1", evictions)
+	}
+	if countNonExpiredAndMemFull != 0 {
+		t.Fatalf("evictions of non-expired keys due to mem full %d, but expected 0",
+			countNonExpiredAndMemFull)
+	}
+
+	evictions = 0
+
+	lru.Add("key2", 2, time.Now().Add(100*time.Millisecond))
+	lru.Add("key3", 3, time.Now().Add(100*time.Millisecond))
+	lru.Add("key4", 4, time.Now().Add(100*time.Millisecond))
+	lru.Add("key5", 5, time.Now().Add(100*time.Millisecond))
+	lru.Add("key6", 6, time.Now().Add(100*time.Millisecond))
+
+	// no expired key, 2 evictions, 2 mem full
+
+	if lru.Len() != maxKeys {
+		t.Fatalf("cache size %d, but expected %d", lru.Len(), maxKeys)
+	}
+	if evictions != 2 {
+		t.Fatalf("evictions %d, but expected 2", evictions)
+	}
+	if countNonExpiredAndMemFull != 2 {
+		t.Fatalf("evictions of non-expired keys due to mem full %d, but expected 2",
+			countNonExpiredAndMemFull)
+	}
+
+	evictions = 0
+	countNonExpiredAndMemFull = 0
+
+	lru.RemoveOldest() // evict due mem full
+
+	// no expired key, 1 evictions, 1 mem full
+
+	if lru.Len() != maxKeys-1 {
+		t.Fatalf("cache size %d, but expected %d", lru.Len(), maxKeys-1)
+	}
+	if evictions != 1 {
+		t.Fatalf("evictions %d, but expected 1", evictions)
+	}
+	if countNonExpiredAndMemFull != 1 {
+		t.Fatalf("evictions of non-expired keys due to mem full %d, but expected 1",
+			countNonExpiredAndMemFull)
+	}
+
+	evictions = 0
+	countNonExpiredAndMemFull = 0
+
+	time.Sleep(200 * time.Millisecond)
+	lru.RemoveOldest() // evict due mem full
+
+	// 1 expired key evicted, 1 mem full
+
+	if lru.Len() != maxKeys-2 {
+		t.Fatalf("cache size %d, but expected %d", lru.Len(), maxKeys-2)
+	}
+	if evictions != 1 {
+		t.Fatalf("evictions %d, but expected 1", evictions)
+	}
+	if countNonExpiredAndMemFull != 0 {
+		t.Fatalf("evictions of non-expired keys due to mem full %d, but expected 0",
+			countNonExpiredAndMemFull)
+	}
+
 }
 
 func TestPurge(t *testing.T) {
 	lru := New(0)
+	var countNonExpiredAndMemFull int
+	var evictions int
+	lru.OnEvicted = func(key Key, value interface{}, nonExpiredAndMemFull bool) {
+		evictions++
+		if nonExpiredAndMemFull {
+			countNonExpiredAndMemFull++
+		}
+	}
 	lru.Add("key1", 1, time.Now().Add(50*time.Millisecond))
 	lru.Add("key2", 2, time.Now().Add(100*time.Millisecond))
 	lru.Add("key3", 3, time.Now().Add(200*time.Millisecond))
@@ -183,12 +280,27 @@ func TestPurge(t *testing.T) {
 	time.Sleep(250 * time.Millisecond)
 	lru.PurgeExpired = false
 	lru.RemoveOldest()
+
 	if lru.Len() != 3 {
 		t.Fatalf("cache size %d, but expected 3", lru.Len())
 	}
+	if evictions != 1 {
+		t.Fatalf("evictions %d, but expected 1", evictions)
+	}
+	if countNonExpiredAndMemFull != 0 {
+		t.Fatalf("evictions of non-expired keys due to mem full %d, but expected 0", countNonExpiredAndMemFull)
+	}
+
 	lru.PurgeExpired = true
 	lru.RemoveOldest()
+
 	if lru.Len() != 1 {
 		t.Fatalf("cache size %d, but expected 1", lru.Len())
+	}
+	if evictions != 3 {
+		t.Fatalf("evictions %d, but expected 3", evictions)
+	}
+	if countNonExpiredAndMemFull != 0 {
+		t.Fatalf("evictions of non-expired keys due to mem full %d, but expected 0", countNonExpiredAndMemFull)
 	}
 }

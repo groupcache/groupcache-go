@@ -596,7 +596,8 @@ func (g *Group) populateCache(key string, value ByteView, cache *cache) {
 		if hotBytes > mainBytes/8 {
 			victim = &g.hotCache
 		}
-		victim.removeOldest()
+
+		victim.removeOldest() // removeOldest is used on mem full condition.
 	}
 }
 
@@ -635,25 +636,25 @@ var NowFunc lru.NowFunc = time.Now
 // makes values always be ByteView, and counts the size of all keys and
 // values.
 type cache struct {
-	mu               sync.RWMutex
-	nbytes           int64 // of all keys and values
-	lru              *lru.Cache
-	nhit, nget       int64
-	nevict           int64 // number of evictions
-	nevictNonExpired int64 // number of non-expired evictions
-	purgeExpired     bool
+	mu                        sync.RWMutex
+	nbytes                    int64 // of all keys and values
+	lru                       *lru.Cache
+	nhit, nget                int64
+	nevict                    int64 // number of evictions
+	nevictNonExpiredOnMemFull int64 // number of evictions for non-expired items on mem full condition
+	purgeExpired              bool
 }
 
 func (c *cache) stats() CacheStats {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return CacheStats{
-		Bytes:               c.nbytes,
-		Items:               c.itemsLocked(),
-		Gets:                c.nget,
-		Hits:                c.nhit,
-		Evictions:           c.nevict,
-		EvictionsNonExpired: c.nevictNonExpired,
+		Bytes:                        c.nbytes,
+		Items:                        c.itemsLocked(),
+		Gets:                         c.nget,
+		Hits:                         c.nhit,
+		Evictions:                    c.nevict,
+		EvictionsNonExpiredOnMemFull: c.nevictNonExpiredOnMemFull,
 	}
 }
 
@@ -663,12 +664,12 @@ func (c *cache) add(key string, value ByteView) {
 	if c.lru == nil {
 		c.lru = &lru.Cache{
 			Now: NowFunc,
-			OnEvicted: func(key lru.Key, value interface{}, expired bool) {
+			OnEvicted: func(key lru.Key, value interface{}, nonExpiredAndMemFull bool) {
 				val := value.(ByteView)
 				c.nbytes -= int64(len(key.(string))) + int64(val.Len())
 				c.nevict++
-				if !expired {
-					c.nevictNonExpired++
+				if nonExpiredAndMemFull {
+					c.nevictNonExpiredOnMemFull++
 				}
 			},
 			PurgeExpired: c.purgeExpired,
@@ -702,6 +703,7 @@ func (c *cache) remove(key string) {
 	c.lru.Remove(key)
 }
 
+// removeOldest is used on mem full condition.
 func (c *cache) removeOldest() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -753,10 +755,10 @@ func (i *AtomicInt) String() string {
 
 // CacheStats are returned by stats accessors on Group.
 type CacheStats struct {
-	Bytes               int64
-	Items               int64
-	Gets                int64
-	Hits                int64
-	Evictions           int64
-	EvictionsNonExpired int64
+	Bytes                        int64
+	Items                        int64
+	Gets                         int64
+	Hits                         int64
+	Evictions                    int64
+	EvictionsNonExpiredOnMemFull int64 // number of evictions for non-expired items on mem full condition
 }
