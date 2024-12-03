@@ -169,13 +169,13 @@ func (i *Instance) NewGroup(name string, cacheBytes int64, getter Getter) (Group
 		return nil, fmt.Errorf("duplicate registration of group '%s'", name)
 	}
 	g := &group{
-		instance:    i,
-		name:        name,
-		getter:      getter,
-		cacheBytes:  cacheBytes,
-		loadGroup:   &singleflight.Group{},
-		setGroup:    &singleflight.Group{},
-		removeGroup: &singleflight.Group{},
+		instance:      i,
+		name:          name,
+		getter:        getter,
+		maxCacheBytes: cacheBytes,
+		loadGroup:     &singleflight.Group{},
+		setGroup:      &singleflight.Group{},
+		removeGroup:   &singleflight.Group{},
 	}
 	if err := g.ResetCacheSize(cacheBytes); err != nil {
 		return nil, err

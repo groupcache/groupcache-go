@@ -263,7 +263,7 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	type transportMethods interface {
 		Get(ctx context.Context, key string, dest Sink) error
-		LocalSet(string, []byte, time.Time)
+		RemoteSet(string, []byte, time.Time)
 		LocalRemove(string)
 	}
 
@@ -309,8 +309,7 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if out.Expire != nil && *out.Expire != 0 {
 			expire = time.Unix(*out.Expire/int64(time.Second), *out.Expire%int64(time.Second))
 		}
-
-		group.LocalSet(*out.Key, out.Value, expire)
+		group.RemoteSet(*out.Key, out.Value, expire)
 		return
 	}
 
