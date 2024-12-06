@@ -85,6 +85,16 @@ func GetGroup(name string) *Group {
 }
 */
 
+type Options struct {
+	Workspace       *Workspace
+	Name            string
+	PurgeExpired    bool
+	CacheBytes      int64
+	HotCacheWeight  int64
+	MainCacheWeight int64
+	Getter          Getter
+}
+
 // NewGroupWithWorkspace creates a coordinated group-aware Getter from a Getter.
 //
 // The returned Getter tries (but does not guarantee) to run only one
@@ -94,8 +104,19 @@ func GetGroup(name string) *Group {
 // completes.
 //
 // The group name must be unique for each getter.
-func NewGroupWithWorkspace(ws *Workspace, name string, purgeExpired bool, cacheBytes int64, getter Getter) *Group {
-	return newGroup(ws, name, purgeExpired, cacheBytes, getter, nil)
+func NewGroupWithWorkspace(options Options) *Group {
+
+	if options.MainCacheWeight == 0 {
+		options.MainCacheWeight = 8
+	}
+
+	if options.HotCacheWeight == 0 {
+		options.HotCacheWeight = 1
+	}
+
+	return newGroup(options.Workspace, options.Name, options.PurgeExpired,
+		options.CacheBytes, options.MainCacheWeight, options.HotCacheWeight,
+		options.Getter, nil)
 }
 
 /*
@@ -128,7 +149,8 @@ func DeregisterGroup(name string) {
 */
 
 // If peers is nil, the peerPicker is called via a sync.Once to initialize it.
-func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes int64, getter Getter, peers PeerPicker) *Group {
+func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
+	mainCacheWeight, hotCacheWeight int64, getter Getter, peers PeerPicker) *Group {
 	if getter == nil {
 		panic("nil Getter")
 	}
@@ -139,14 +161,16 @@ func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes int64, g
 		panic("duplicate registration of group " + name)
 	}
 	g := &Group{
-		ws:          ws,
-		name:        name,
-		getter:      getter,
-		peers:       peers,
-		cacheBytes:  cacheBytes,
-		loadGroup:   &singleflight.Group{},
-		setGroup:    &singleflight.Group{},
-		removeGroup: &singleflight.Group{},
+		ws:              ws,
+		name:            name,
+		getter:          getter,
+		peers:           peers,
+		cacheBytes:      cacheBytes,
+		mainCacheWeight: mainCacheWeight,
+		hotCacheWeight:  hotCacheWeight,
+		loadGroup:       &singleflight.Group{},
+		setGroup:        &singleflight.Group{},
+		removeGroup:     &singleflight.Group{},
 	}
 	g.mainCache.purgeExpired = purgeExpired
 	g.hotCache.purgeExpired = purgeExpired
@@ -206,6 +230,9 @@ type Group struct {
 	peersOnce  sync.Once
 	peers      PeerPicker
 	cacheBytes int64 // limit for sum of mainCache and hotCache size
+
+	mainCacheWeight int64
+	hotCacheWeight  int64
 
 	// mainCache is a cache of the keys for which this process
 	// (amongst its peers) is authoritative. That is, this cache
@@ -593,7 +620,8 @@ func (g *Group) populateCache(key string, value ByteView, cache *cache) {
 		// It should be something based on measurements and/or
 		// respecting the costs of different resources.
 		victim := &g.mainCache
-		if hotBytes > mainBytes/8 {
+		// default weights: if hotBytes > mainBytes/8 { ... }
+		if hotBytes*g.mainCacheWeight > mainBytes*g.hotCacheWeight {
 			victim = &g.hotCache
 		}
 

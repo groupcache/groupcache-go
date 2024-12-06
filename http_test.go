@@ -109,7 +109,13 @@ func TestHTTPPool(t *testing.T) {
 	defer cancel()
 
 	const purgeExpired = true
-	g := NewGroupWithWorkspace(DefaultWorkspace, "httpPoolTest", purgeExpired, 1<<20, getter)
+	g := NewGroupWithWorkspace(Options{
+		Workspace:    DefaultWorkspace,
+		Name:         "httpPoolTest",
+		PurgeExpired: purgeExpired,
+		CacheBytes:   1 << 2,
+		Getter:       getter,
+	})
 
 	for _, key := range testKeys(nGets) {
 		var value string
@@ -244,7 +250,13 @@ func beChildForTestHTTPPool(t *testing.T) {
 		return nil
 	})
 	const purgeExpired = true
-	NewGroupWithWorkspace(DefaultWorkspace, "httpPoolTest", purgeExpired, 1<<20, getter)
+	NewGroupWithWorkspace(Options{
+		Workspace:    DefaultWorkspace,
+		Name:         "httpPoolTest",
+		PurgeExpired: purgeExpired,
+		CacheBytes:   1 << 20,
+		Getter:       getter,
+	})
 
 	log.Fatal(http.ListenAndServe(addrs[*peerIndex], p))
 }

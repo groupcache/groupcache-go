@@ -34,28 +34,34 @@ func ExampleUsage() {
 
 	// Create a new group cache with a max cache size of 3MB
 	const purgeExpired = true
-	group := groupcache.NewGroupWithWorkspace(groupcache.DefaultWorkspace, "users", purgeExpired, 3000000, groupcache.GetterFunc(
-		func(ctx context.Context, id string, dest groupcache.Sink) error {
+	group := groupcache.NewGroupWithWorkspace(groupcache.Options{
+		Workspace:    groupcache.DefaultWorkspace,
+		Name:         "users",
+		PurgeExpired: purgeExpired,
+		CacheBytes:   3_000_000,
+		Getter: groupcache.GetterFunc(
+			func(ctx context.Context, id string, dest groupcache.Sink) error {
 
-			// In a real scenario we might fetch the value from a database.
-			/*if user, err := fetchUserFromMongo(ctx, id); err != nil {
-				return err
-			}*/
+				// In a real scenario we might fetch the value from a database.
+				/*if user, err := fetchUserFromMongo(ctx, id); err != nil {
+					return err
+				}*/
 
-			user := User{
-				Id:      "12345",
-				Name:    "John Doe",
-				Age:     40,
-				IsSuper: true,
-			}
+				user := User{
+					Id:      "12345",
+					Name:    "John Doe",
+					Age:     40,
+					IsSuper: true,
+				}
 
-			// Set the user in the groupcache to expire after 5 minutes
-			if err := dest.SetProto(&user, time.Now().Add(time.Minute*5)); err != nil {
-				return err
-			}
-			return nil
-		},
-	))
+				// Set the user in the groupcache to expire after 5 minutes
+				if err := dest.SetProto(&user, time.Now().Add(time.Minute*5)); err != nil {
+					return err
+				}
+				return nil
+			},
+		),
+	})
 
 	var user User
 

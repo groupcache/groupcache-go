@@ -60,29 +60,47 @@ const (
 
 func testSetup() {
 	const purgeExpired = true
-	stringGroup = NewGroupWithWorkspace(DefaultWorkspace, stringGroupName, purgeExpired, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
-		if key == fromChan {
-			key = <-stringc
-		}
-		cacheFills.Add(1)
-		return dest.SetString("ECHO:"+key, time.Time{})
-	}))
+	stringGroup = NewGroupWithWorkspace(Options{
+		Workspace:    DefaultWorkspace,
+		Name:         stringGroupName,
+		PurgeExpired: purgeExpired,
+		CacheBytes:   cacheSize,
+		Getter: GetterFunc(func(_ context.Context, key string, dest Sink) error {
+			if key == fromChan {
+				key = <-stringc
+			}
+			cacheFills.Add(1)
+			return dest.SetString("ECHO:"+key, time.Time{})
+		}),
+	})
 
-	protoGroup = NewGroupWithWorkspace(DefaultWorkspace, protoGroupName, purgeExpired, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
-		if key == fromChan {
-			key = <-stringc
-		}
-		cacheFills.Add(1)
-		return dest.SetProto(&testpb.TestMessage{
-			Name: proto.String("ECHO:" + key),
-			City: proto.String("SOME-CITY"),
-		}, time.Time{})
-	}))
+	protoGroup = NewGroupWithWorkspace(Options{
+		Workspace:    DefaultWorkspace,
+		Name:         protoGroupName,
+		PurgeExpired: purgeExpired,
+		CacheBytes:   cacheSize,
+		Getter: GetterFunc(func(_ context.Context, key string, dest Sink) error {
+			if key == fromChan {
+				key = <-stringc
+			}
+			cacheFills.Add(1)
+			return dest.SetProto(&testpb.TestMessage{
+				Name: proto.String("ECHO:" + key),
+				City: proto.String("SOME-CITY"),
+			}, time.Time{})
+		}),
+	})
 
-	expireGroup = NewGroupWithWorkspace(DefaultWorkspace, expireGroupName, purgeExpired, cacheSize, GetterFunc(func(_ context.Context, key string, dest Sink) error {
-		cacheFills.Add(1)
-		return dest.SetString("ECHO:"+key, time.Now().Add(time.Millisecond*100))
-	}))
+	expireGroup = NewGroupWithWorkspace(Options{
+		Workspace:    DefaultWorkspace,
+		Name:         expireGroupName,
+		PurgeExpired: purgeExpired,
+		CacheBytes:   cacheSize,
+		Getter: GetterFunc(func(_ context.Context, key string, dest Sink) error {
+			cacheFills.Add(1)
+			return dest.SetString("ECHO:"+key, time.Now().Add(time.Millisecond*100))
+		}),
+	})
 }
 
 // tests that a Getter's Get method is only called once with two
@@ -312,7 +330,10 @@ func TestPeers(t *testing.T) {
 		return dest.SetString("got:"+key, time.Time{})
 	}
 	const purgeExpired = true
-	testGroup := newGroup(DefaultWorkspace, "TestPeers-group", purgeExpired, cacheSize, GetterFunc(getter), peerList)
+	const mainCacheWeight = 8
+	const hotCacheWeight = 1
+	testGroup := newGroup(DefaultWorkspace, "TestPeers-group", purgeExpired,
+		cacheSize, mainCacheWeight, hotCacheWeight, GetterFunc(getter), peerList)
 	run := func(name string, n int, wantSummary string) {
 		// Reset counters
 		localHits = 0
@@ -441,9 +462,12 @@ func TestNoDedup(t *testing.T) {
 	const testkey = "testkey"
 	const testval = "testval"
 	const purgeExpired = true
-	g := newGroup(DefaultWorkspace, "testgroup", purgeExpired, 1024, GetterFunc(func(_ context.Context, key string, dest Sink) error {
-		return dest.SetString(testval, time.Time{})
-	}), nil)
+	const mainCacheWeight = 8
+	const hotCacheWeight = 1
+	g := newGroup(DefaultWorkspace, "testgroup", purgeExpired, 1024,
+		mainCacheWeight, hotCacheWeight, GetterFunc(func(_ context.Context, key string, dest Sink) error {
+			return dest.SetString(testval, time.Time{})
+		}), nil)
 
 	orderedGroup := &orderedFlightGroup{
 		stage1: make(chan bool),
@@ -526,8 +550,11 @@ func TestContextDeadlineOnPeer(t *testing.T) {
 		return dest.SetString("got:"+key, time.Time{})
 	}
 	const purgeExpired = true
+	const mainCacheWeight = 8
+	const hotCacheWeight = 1
 	testGroup := newGroup(DefaultWorkspace, "TestContextDeadlineOnPeer-group",
-		purgeExpired, cacheSize, GetterFunc(getter), peerList)
+		purgeExpired, cacheSize, mainCacheWeight, hotCacheWeight,
+		GetterFunc(getter), peerList)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*300)
 	defer cancel()

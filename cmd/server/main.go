@@ -19,22 +19,28 @@ var store = map[string]string{}
 
 const purgeExpired = true
 
-var group = groupcache.NewGroupWithWorkspace(groupcache.DefaultWorkspace, "cache1", purgeExpired, 64<<20, groupcache.GetterFunc(
-	func(ctx context.Context, key string, dest groupcache.Sink) error {
-		fmt.Printf("Get Called\n")
-		v, ok := store[key]
-		if !ok {
-			return fmt.Errorf("key not set")
-		} else {
-			if err := dest.SetBytes([]byte(v), time.Now().Add(10*time.Minute)); err != nil {
-				log.Printf("Failed to set cache value for key '%s' - %v\n", key, err)
-				return err
+var group = groupcache.NewGroupWithWorkspace(groupcache.Options{
+	Workspace:    groupcache.DefaultWorkspace,
+	Name:         "cache1",
+	PurgeExpired: purgeExpired,
+	CacheBytes:   64 << 20,
+	Getter: groupcache.GetterFunc(
+		func(ctx context.Context, key string, dest groupcache.Sink) error {
+			fmt.Printf("Get Called\n")
+			v, ok := store[key]
+			if !ok {
+				return fmt.Errorf("key not set")
+			} else {
+				if err := dest.SetBytes([]byte(v), time.Now().Add(10*time.Minute)); err != nil {
+					log.Printf("Failed to set cache value for key '%s' - %v\n", key, err)
+					return err
+				}
 			}
-		}
 
-		return nil
-	},
-))
+			return nil
+		},
+	),
+})
 
 func main() {
 	serverURL := flag.String("server-url", "http://localhost:8080", "server url")

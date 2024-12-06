@@ -1,6 +1,6 @@
 module github.com/modernprogram/groupcache/v2
 
-go 1.23.3
+go 1.23.4
 
 require (
 	github.com/golang/protobuf v1.5.3
