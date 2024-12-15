@@ -3,7 +3,6 @@ module github.com/modernprogram/groupcache/v2
 go 1.23.4
 
 require (
-	github.com/golang/protobuf v1.5.3
 	github.com/segmentio/fasthash v1.0.3
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.4

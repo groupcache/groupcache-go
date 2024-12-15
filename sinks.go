@@ -20,7 +20,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 var _ Sink = &stringSink{}
