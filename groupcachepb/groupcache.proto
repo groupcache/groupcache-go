@@ -18,6 +18,8 @@ syntax = "proto2";
 
 package groupcachepb;
 
+option go_package = ".";
+
 message GetRequest {
   required string group = 1;
   required string key = 2; // not actually required/guaranteed to be UTF-8

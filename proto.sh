@@ -11,6 +11,11 @@ protoc -I=$PROTO_DIR \
     --go_out=$PROTO_DIR \
     $PROTO_DIR/groupcache.proto
 
-protoc -I=$PROTO_DIR \
+echo FIXME enable example.proto
+#protoc -I=$PROTO_DIR \
+#   --go_out=. \
+#    $PROTO_DIR/example.proto
+
+protoc -I=testpb \
    --go_out=. \
-    $PROTO_DIR/example.proto
+    testpb/test.proto
