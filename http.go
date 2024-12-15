@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -363,7 +362,7 @@ func (h *httpGetter) Set(ctx context.Context, in *pb.SetRequest) error {
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		body, err := ioutil.ReadAll(res.Body)
+		body, err := io.ReadAll(res.Body)
 		if err != nil {
 			return fmt.Errorf("while reading body response: %v", res.Status)
 		}
@@ -380,7 +379,7 @@ func (h *httpGetter) Remove(ctx context.Context, in *pb.GetRequest) error {
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		body, err := ioutil.ReadAll(res.Body)
+		body, err := io.ReadAll(res.Body)
 		if err != nil {
 			return fmt.Errorf("while reading body response: %v", res.Status)
 		}

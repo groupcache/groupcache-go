@@ -96,7 +96,9 @@ func main() {
 		}
 	}()
 
-	fmt.Printf("Running...\n")
+	fmt.Println("Running...")
+	fmt.Println("Try: curl -d key=key1 -d value=value1 localhost:8081/set")
+	fmt.Println("Try: curl -d key=key1 localhost:8081/cache")
 	termChan := make(chan os.Signal, 1)
 	signal.Notify(termChan, syscall.SIGINT, syscall.SIGTERM)
 	<-termChan
