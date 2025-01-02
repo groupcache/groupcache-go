@@ -32,6 +32,8 @@ import (
 
 // Group is the user facing interface for a group
 type Group interface {
+	// TODO: deprecate the hotCache boolean in Set(). It is not needed
+
 	Set(context.Context, string, []byte, time.Time, bool) error
 	Get(context.Context, string, transport.Sink) error
 	Remove(context.Context, string) error
@@ -60,10 +62,10 @@ func (f GetterFunc) Get(ctx context.Context, key string, dest transport.Sink) er
 // A Group is a cache namespace and associated data loaded spread over
 // a group of 1 or more machines.
 type group struct {
-	name       string
-	getter     Getter
-	instance   *Instance
-	cacheBytes int64 // limit for sum of mainCache and hotCache size
+	name          string
+	getter        Getter
+	instance      *Instance
+	maxCacheBytes int64 // max size of both mainCache and hotCache
 
 	// mainCache is a cache of the keys for which this process
 	// (amongst its peers) is authoritative. That is, this cache
@@ -135,27 +137,56 @@ func (g *group) Get(ctx context.Context, key string, dest transport.Sink) error 
 	return transport.SetSinkView(dest, value)
 }
 
-func (g *group) Set(ctx context.Context, key string, value []byte, expire time.Time, hotCache bool) error {
+func (g *group) Set(ctx context.Context, key string, value []byte, expire time.Time, _ bool) error {
 	if key == "" {
 		return errors.New("empty Set() key not allowed")
+	}
+
+	if g.maxCacheBytes <= 0 {
+		return nil
 	}
 
 	_, err := g.setGroup.Do(key, func() (interface{}, error) {
 		// If remote peer owns this key
 		owner, isRemote := g.instance.PickPeer(key)
 		if isRemote {
-			if err := g.setFromPeer(ctx, owner, key, value, expire); err != nil {
+			// Set the key/value on the remote peer
+			if err := g.setPeer(ctx, owner, key, value, expire); err != nil {
 				return nil, err
 			}
-			// TODO(thrawn01): Not sure if this is useful outside of tests...
-			//  maybe we should ALWAYS update the local cache?
-			if hotCache {
-				g.localSet(key, value, expire, g.hotCache)
-			}
-			return nil, nil
 		}
-		// We own this key
-		g.localSet(key, value, expire, g.mainCache)
+		// Update the local caches
+		bv := transport.ByteViewWithExpire(value, expire)
+		g.loadGroup.Lock(func() {
+			g.mainCache.Add(key, bv)
+			g.hotCache.Remove(key)
+		})
+
+		// Update all peers in the cluster
+		var wg sync.WaitGroup
+		for _, p := range g.instance.getAllPeers() {
+			if p.PeerInfo().IsSelf {
+				continue // Skip self
+			}
+
+			// Do not update the owner again, we already updated them
+			if p.HashKey() == owner.HashKey() {
+				continue
+			}
+
+			wg.Add(1)
+			go func(p peer.Client) {
+				if err := g.setPeer(ctx, p, key, value, expire); err != nil {
+					g.instance.opts.Logger.Error("while calling Set on peer",
+						"peer", p.PeerInfo().Address,
+						"key", key,
+						"err", err)
+				}
+				wg.Done()
+			}(p)
+		}
+		wg.Wait()
+
 		return nil, nil
 	})
 	return err
@@ -279,7 +310,8 @@ func (g *group) load(ctx context.Context, key string, dest transport.Sink) (valu
 
 			if g.instance.opts.Logger != nil {
 				g.instance.opts.Logger.Error(
-					fmt.Sprintf("error retrieving key from peer '%s'", peer.PeerInfo().Address),
+					"while retrieving key from peer",
+					"peer", peer.PeerInfo().Address,
 					"category", "groupcache",
 					"err", err,
 					"key", key)
@@ -340,7 +372,7 @@ func (g *group) getFromPeer(ctx context.Context, peer peer.Client, key string) (
 	return value, nil
 }
 
-func (g *group) setFromPeer(ctx context.Context, peer peer.Client, k string, v []byte, e time.Time) error {
+func (g *group) setPeer(ctx context.Context, peer peer.Client, k string, v []byte, e time.Time) error {
 	var expire int64
 	if !e.IsZero() {
 		expire = e.UnixNano()
@@ -363,7 +395,7 @@ func (g *group) removeFromPeer(ctx context.Context, peer peer.Client, key string
 }
 
 func (g *group) lookupCache(key string) (value transport.ByteView, ok bool) {
-	if g.cacheBytes <= 0 {
+	if g.maxCacheBytes <= 0 {
 		return
 	}
 	value, ok = g.mainCache.Get(key)
@@ -374,26 +406,30 @@ func (g *group) lookupCache(key string) (value transport.ByteView, ok bool) {
 	return
 }
 
-func (g *group) LocalSet(key string, value []byte, expire time.Time) {
-	g.localSet(key, value, expire, g.mainCache)
-}
-
-func (g *group) localSet(key string, value []byte, expire time.Time, cache Cache) {
-	if g.cacheBytes <= 0 {
+// RemoteSet is called by the transport to set values in the local and hot caches when
+// a remote peer sends us a pb.SetRequest
+func (g *group) RemoteSet(key string, value []byte, expire time.Time) {
+	if g.maxCacheBytes <= 0 {
 		return
 	}
 
-	bv := transport.ByteViewWithExpire(value, expire)
-
-	// Ensure no requests are in flight
+	// Lock all load operations until this function returns
 	g.loadGroup.Lock(func() {
-		g.populateCache(key, bv, cache)
+		// This instance could take over ownership of this key at any moment after
+		// the set is made. In order to avoid accidental propagation of the previous
+		// value should this instance become owner of the key, we always set key in
+		// the main cache.
+		bv := transport.ByteViewWithExpire(value, expire)
+		g.mainCache.Add(key, bv)
+
+		// It's possible the value could be in the hot cache.
+		g.hotCache.Remove(key)
 	})
 }
 
 func (g *group) LocalRemove(key string) {
 	// Clear key from our local cache
-	if g.cacheBytes <= 0 {
+	if g.maxCacheBytes <= 0 {
 		return
 	}
 
@@ -405,7 +441,7 @@ func (g *group) LocalRemove(key string) {
 }
 
 func (g *group) populateCache(key string, value transport.ByteView, cache Cache) {
-	if g.cacheBytes <= 0 {
+	if g.maxCacheBytes <= 0 {
 		return
 	}
 	cache.Add(key, value)
@@ -440,7 +476,7 @@ func (g *group) CacheStats(which CacheType) CacheStats {
 // ResetCacheSize changes the maxBytes allowed and resets both the main and hot caches.
 // It is mostly intended for testing and is not thread safe.
 func (g *group) ResetCacheSize(maxBytes int64) error {
-	g.cacheBytes = maxBytes
+	g.maxCacheBytes = maxBytes
 	var (
 		hotCache  int64
 		mainCache int64

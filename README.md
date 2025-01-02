@@ -61,7 +61,8 @@ func ExampleUsage() {
     defer cancel()
 
     // ListenAndServe is a convenience function which Starts an instance of groupcache 
-    // with the provided transport and listens for groupcache HTTP requests on the address provided.
+    // with the provided transport and listens for groupcache HTTP requests on
+    // the address provided.
     d, err := groupcache.ListenAndServe(ctx, "192.168.1.1:8080", groupcache.Options{})
     if err != nil {
         log.Fatal("while starting server on 192.168.1.1:8080")

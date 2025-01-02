@@ -33,6 +33,7 @@ import (
 	"github.com/groupcache/groupcache-go/v3/cluster"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/pb/testpb"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
@@ -449,5 +450,48 @@ func TestNoDeDup(t *testing.T) {
 	used, _ := g.UsedBytes()
 	if used != wantBytes {
 		t.Errorf("cache has %d bytes, want %d", used, wantBytes)
+	}
+}
+
+func TestSetValueOnAllPeers(t *testing.T) {
+	ctx := context.Background()
+	err := cluster.Start(ctx, 3, groupcache.Options{
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
+	require.NoError(t, err)
+	defer func() { _ = cluster.Shutdown(context.Background()) }()
+
+	// Create a group for each instance in the cluster
+	var groups []groupcache.Group
+	for _, d := range cluster.ListDaemons() {
+		g, err := d.GetInstance().NewGroup("group", 1<<20, groupcache.GetterFunc(func(ctx context.Context, key string, dest transport.Sink) error {
+			return dest.SetString("original-value", time.Time{})
+		}))
+		require.NoError(t, err)
+		groups = append(groups, g)
+	}
+
+	// Set the value on the first group
+	err = groups[0].Set(ctx, "key", []byte("value"), time.Time{}, false)
+	require.NoError(t, err)
+
+	// Verify the value exists on all peers
+	for i, g := range groups {
+		var result string
+		err := g.Get(ctx, "key", transport.StringSink(&result))
+		require.NoError(t, err, "Failed to get value from peer %d", i)
+		assert.Equal(t, "value", result, "Unexpected value from peer %d", i)
+	}
+
+	// Update the value on the second group
+	err = groups[1].Set(ctx, "key", []byte("foo"), time.Time{}, false)
+	require.NoError(t, err)
+
+	// Verify the value was updated
+	for i, g := range groups {
+		var result string
+		err := g.Get(ctx, "key", transport.StringSink(&result))
+		require.NoError(t, err, "Failed to get value from peer %d", i)
+		assert.Equal(t, "foo", result, "Unexpected value from peer %d", i)
 	}
 }

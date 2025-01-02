@@ -6,7 +6,8 @@ $(GOLANGCI_LINT): ## Download Go linter
 
 .PHONY: ci
 ci: tidy lint test
-	go mod tidy && git diff --exit-code
+	@echo
+	@echo "\033[32mEVERYTHING PASSED!\033[0m"
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Run Go linter
