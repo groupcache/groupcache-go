@@ -511,9 +511,17 @@ func (g *Group) load(ctx context.Context, key string, dest Sink, crosstalkAllowe
 				// since the context is no longer valid
 				return nil, err
 			}
+
+			// the crosstalk peer request above failed with an unexpected error
+			// FIXME TODO XXX: we are currently generating the key by ourselves, but should we?
 		}
 
-		// we are the key owner
+		// either
+		//   1. we are the key owner
+		//      then we will generate the key by ourselves
+		// or
+		//   2. the crosstalk peer request above failed with an unexpected error
+		//      FIXME TODO XXX: we are currently generating the key by ourselves, but should we?
 
 		value, err = g.getLocally(ctx, key, dest)
 		if err != nil {
