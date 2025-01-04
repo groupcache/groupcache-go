@@ -303,19 +303,19 @@ func (g *Group) initPeers() {
 	}
 }
 
-// Get retrieves key for library caller, thus further crosstalk would be allowed.
+// Get retrieves key for library caller, thus crosstalk is allowed.
 func (g *Group) Get(ctx context.Context, key string, dest Sink) error {
-	const crosstalk = true
-	return g.get(ctx, key, dest, crosstalk)
+	const crosstalkAllowed = true
+	return g.get(ctx, key, dest, crosstalkAllowed)
 }
 
 // GetForPeer retrieves key for peer in a crosstalk request, thus further crosstalk won't be allowed.
 func (g *Group) GetForPeer(ctx context.Context, key string, dest Sink) error {
-	const crosstalk = false
-	return g.get(ctx, key, dest, crosstalk)
+	const crosstalkAllowed = false
+	return g.get(ctx, key, dest, crosstalkAllowed)
 }
 
-func (g *Group) get(ctx context.Context, key string, dest Sink, crosstalk bool) error {
+func (g *Group) get(ctx context.Context, key string, dest Sink, crosstalkAllowed bool) error {
 	g.peersOnce.Do(g.initPeers)
 	g.Stats.Gets.Add(1)
 	if dest == nil {
@@ -333,7 +333,7 @@ func (g *Group) get(ctx context.Context, key string, dest Sink, crosstalk bool) 
 	// (if local) will set this; the losers will not. The common
 	// case will likely be one caller.
 	destPopulated := false
-	value, destPopulated, err := g.load(ctx, key, dest, crosstalk)
+	value, destPopulated, err := g.load(ctx, key, dest, crosstalkAllowed)
 	if err != nil {
 		return err
 	}
@@ -423,7 +423,7 @@ func (g *Group) Remove(ctx context.Context, key string) error {
 var errFurtherCrosstalkRefused = errors.New("further crosstalk refused")
 
 // load loads key either by invoking the getter locally or by sending it to another machine.
-func (g *Group) load(ctx context.Context, key string, dest Sink, crosstalk bool) (value ByteView, destPopulated bool, err error) {
+func (g *Group) load(ctx context.Context, key string, dest Sink, crosstalkAllowed bool) (value ByteView, destPopulated bool, err error) {
 	g.Stats.Loads.Add(1)
 	viewi, err := g.loadGroup.Do(key, func() (interface{}, error) {
 		// Check the cache again because singleflight can only dedup calls
@@ -458,8 +458,8 @@ func (g *Group) load(ctx context.Context, key string, dest Sink, crosstalk bool)
 
 			// other peer (not me) is the key owner
 
-			if !crosstalk {
-				// crosstalk=false: we are responding to a crosstalk request.
+			if !crosstalkAllowed {
+				// crosstalkAllowed=false: we are responding to a crosstalk request.
 				// then we refuse further crosstalk.
 				g.Stats.CrosstalkRefusals.Add(1)
 				return nil, errFurtherCrosstalkRefused
