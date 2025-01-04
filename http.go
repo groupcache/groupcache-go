@@ -243,7 +243,7 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var b []byte
 
 	value := AllocatingByteSliceSink(&b)
-	err := group.Get(ctx, key, value)
+	err := group.GetForPeer(ctx, key, value)
 	if err != nil {
 		if errors.Is(err, &ErrNotFound{}) {
 			http.Error(w, err.Error(), http.StatusNotFound)
