@@ -279,20 +279,20 @@ func TestPurge(t *testing.T) {
 	}
 	time.Sleep(250 * time.Millisecond)
 	lru.PurgeExpired = false
-	lru.RemoveOldest()
+	lru.RemoveAllExpired()
 
-	if lru.Len() != 3 {
-		t.Fatalf("cache size %d, but expected 3", lru.Len())
+	if lru.Len() != 4 {
+		t.Fatalf("cache size %d, but expected 4", lru.Len())
 	}
-	if evictions != 1 {
-		t.Fatalf("evictions %d, but expected 1", evictions)
+	if evictions != 0 {
+		t.Fatalf("evictions %d, but expected 0", evictions)
 	}
 	if countNonExpiredAndMemFull != 0 {
 		t.Fatalf("evictions of non-expired keys due to mem full %d, but expected 0", countNonExpiredAndMemFull)
 	}
 
 	lru.PurgeExpired = true
-	lru.RemoveOldest()
+	lru.RemoveAllExpired()
 
 	if lru.Len() != 1 {
 		t.Fatalf("cache size %d, but expected 1", lru.Len())

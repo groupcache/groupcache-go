@@ -20,8 +20,8 @@ For API docs and examples, see http://godoc.org/github.com/modernprogram/groupca
 
 * Additional metric `EvictionsNonExpiredOnMemFull` accounts number of evictions
   for non-expired items on mem full condition. This metrics helps in right
-  sizing the memory limit for the cache. Also, when the cache decides to
-  evict an item due to memory full, it also evicts all expired keys, thus
+  sizing the memory limit for the cache. When the cache hits mem full condition,
+  it evicts all expired keys from both main cache and hot cache, thus
   reducing the metric `Bytes` in order to depict how much cache space was
   being held by expired keys.
 
