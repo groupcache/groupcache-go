@@ -12,6 +12,20 @@ replacement for memcached in many cases.
 
 For API docs and examples, see http://godoc.org/github.com/modernprogram/groupcache/v2
 
+### Modifications from mailgun/groupcache to modernprogram/groupcache
+
+* Support for "workspace": explicit state controlled by the user. The
+  application can release groupcache resources by dropping references
+  to the workspace.
+
+* Additional metric `EvictionsNonExpiredOnMemFull` accounts number of evictions
+  for non-expired items on mem full condition. This metrics helps in right
+  sizing the memory limit for the cache. Also, when the cache decides to
+  evict an item due to memory full, it also evicts all expired keys, thus
+  reducing the metric `Bytes` in order to depict how much cache space was
+  being held by expired keys.
+
+* Fix for distributed deadklock: https://github.com/mailgun/groupcache/issues/72
    
 ### Modifications from original library
 
