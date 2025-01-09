@@ -289,6 +289,7 @@ type Stats struct {
 	LocalLoads               AtomicInt // total good local loads
 	LocalLoadErrs            AtomicInt // total bad local loads
 	ServerRequests           AtomicInt // gets that came over the network from peers
+	CrosstalkRefusals        AtomicInt // refusals for additional crosstalks
 }
 
 // Name returns the name of the group.
@@ -302,7 +303,19 @@ func (g *Group) initPeers() {
 	}
 }
 
+// Get retrieves key for library caller, thus crosstalk is allowed.
 func (g *Group) Get(ctx context.Context, key string, dest Sink) error {
+	const crosstalkAllowed = true
+	return g.get(ctx, key, dest, crosstalkAllowed)
+}
+
+// GetForPeer retrieves key for peer in a crosstalk request, thus further crosstalk won't be allowed.
+func (g *Group) GetForPeer(ctx context.Context, key string, dest Sink) error {
+	const crosstalkAllowed = false
+	return g.get(ctx, key, dest, crosstalkAllowed)
+}
+
+func (g *Group) get(ctx context.Context, key string, dest Sink, crosstalkAllowed bool) error {
 	g.peersOnce.Do(g.initPeers)
 	g.Stats.Gets.Add(1)
 	if dest == nil {
@@ -320,7 +333,7 @@ func (g *Group) Get(ctx context.Context, key string, dest Sink) error {
 	// (if local) will set this; the losers will not. The common
 	// case will likely be one caller.
 	destPopulated := false
-	value, destPopulated, err := g.load(ctx, key, dest)
+	value, destPopulated, err := g.load(ctx, key, dest, crosstalkAllowed)
 	if err != nil {
 		return err
 	}
@@ -407,8 +420,10 @@ func (g *Group) Remove(ctx context.Context, key string) error {
 	return err
 }
 
+var errFurtherCrosstalkRefused = errors.New("further crosstalk refused")
+
 // load loads key either by invoking the getter locally or by sending it to another machine.
-func (g *Group) load(ctx context.Context, key string, dest Sink) (value ByteView, destPopulated bool, err error) {
+func (g *Group) load(ctx context.Context, key string, dest Sink, crosstalkAllowed bool) (value ByteView, destPopulated bool, err error) {
 	g.Stats.Loads.Add(1)
 	viewi, err := g.loadGroup.Do(key, func() (interface{}, error) {
 		// Check the cache again because singleflight can only dedup calls
@@ -440,6 +455,15 @@ func (g *Group) load(ctx context.Context, key string, dest Sink) (value ByteView
 		var value ByteView
 		var err error
 		if peer, ok := g.peers.PickPeer(key); ok {
+
+			// other peer (not me) is the key owner
+
+			if !crosstalkAllowed {
+				// crosstalkAllowed=false: we are responding to a crosstalk request.
+				// then we refuse further crosstalk.
+				g.Stats.CrosstalkRefusals.Add(1)
+				return nil, errFurtherCrosstalkRefused
+			}
 
 			// metrics duration start
 			start := time.Now()
@@ -487,7 +511,17 @@ func (g *Group) load(ctx context.Context, key string, dest Sink) (value ByteView
 				// since the context is no longer valid
 				return nil, err
 			}
+
+			// the crosstalk peer request above failed with an unexpected error
+			// FIXME TODO XXX: we are currently generating the key by ourselves, but should we?
 		}
+
+		// either
+		//   1. we are the key owner
+		//      then we will generate the key by ourselves
+		// or
+		//   2. the crosstalk peer request above failed with an unexpected error
+		//      FIXME TODO XXX: we are currently generating the key by ourselves, but should we?
 
 		value, err = g.getLocally(ctx, key, dest)
 		if err != nil {
