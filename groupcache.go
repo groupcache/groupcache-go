@@ -635,11 +635,11 @@ func (g *Group) localRemove(key string) {
 	})
 }
 
-func (g *Group) populateCache(key string, value ByteView, cache *cache) {
+func (g *Group) populateCache(key string, value ByteView, c *cache) {
 	if g.cacheBytes <= 0 {
 		return
 	}
-	cache.add(key, value)
+	c.add(key, value)
 
 	// Evict items from cache(s) if necessary.
 	for {
@@ -649,13 +649,20 @@ func (g *Group) populateCache(key string, value ByteView, cache *cache) {
 			return
 		}
 
+		// here we are on mem full condition.
+
+		g.mainCache.removeAllExpired()
+		g.hotCache.removeAllExpired()
+
 		// TODO(bradfitz): this is good-enough-for-now logic.
 		// It should be something based on measurements and/or
 		// respecting the costs of different resources.
-		victim := &g.mainCache
+		var victim *cache
 		// default weights: if hotBytes > mainBytes/8 { ... }
 		if hotBytes*g.mainCacheWeight > mainBytes*g.hotCacheWeight {
 			victim = &g.hotCache
+		} else {
+			victim = &g.mainCache
 		}
 
 		victim.removeOldest() // removeOldest is used on mem full condition.
@@ -770,6 +777,15 @@ func (c *cache) removeOldest() {
 	defer c.mu.Unlock()
 	if c.lru != nil {
 		c.lru.RemoveOldest()
+	}
+}
+
+// removeAllExpired is used on mem full condition.
+func (c *cache) removeAllExpired() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.lru != nil {
+		c.lru.RemoveAllExpired()
 	}
 }
 
