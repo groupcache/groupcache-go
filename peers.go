@@ -76,12 +76,14 @@ func RegisterPeerPicker(fn func() PeerPicker) {
 // It is called once, when the first group is created.
 // Either RegisterPeerPickerWithWorkspace or RegisterPerGroupPeerPickerWithWorkspace should be
 // called exactly once, but not both.
+/*
 func RegisterPerGroupPeerPickerWithWorkspace(ws *Workspace, fn func(groupName string) PeerPicker) {
 	if ws.portPicker != nil {
 		panic("RegisterPeerPicker called more than once")
 	}
 	ws.portPicker = fn
 }
+*/
 
 /*
 // RegisterPerGroupPeerPicker registers the peer initialization function,
