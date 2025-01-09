@@ -148,6 +148,7 @@ func (p *HTTPPool) Set(peers ...string) {
 		p.httpGetters[peer] = &httpGetter{
 			getTransport: p.opts.Transport,
 			baseURL:      peer + p.opts.BasePath,
+			ws:           p.ws,
 		}
 	}
 }
@@ -215,9 +216,9 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// The read the body and set the key value
 	if r.Method == http.MethodPut {
 		defer r.Body.Close()
-		b := bufferPool.Get().(*bytes.Buffer)
+		b := group.ws.bufferPool.Get().(*bytes.Buffer)
 		b.Reset()
-		defer bufferPool.Put(b)
+		defer group.ws.bufferPool.Put(b)
 		_, err := io.Copy(b, r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -276,14 +277,11 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 type httpGetter struct {
 	getTransport func(context.Context) http.RoundTripper
 	baseURL      string
+	ws           *Workspace
 }
 
 func (p *httpGetter) GetURL() string {
 	return p.baseURL
-}
-
-var bufferPool = sync.Pool{
-	New: func() interface{} { return new(bytes.Buffer) },
 }
 
 type request interface {
@@ -336,9 +334,9 @@ func (h *httpGetter) Get(ctx context.Context, in *pb.GetRequest, out *pb.GetResp
 
 		return fmt.Errorf("server returned: %v, %v", res.Status, string(msg))
 	}
-	b := bufferPool.Get().(*bytes.Buffer)
+	b := h.ws.bufferPool.Get().(*bytes.Buffer)
 	b.Reset()
-	defer bufferPool.Put(b)
+	defer h.ws.bufferPool.Put(b)
 	_, err := io.Copy(b, res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %v", err)
