@@ -22,17 +22,12 @@ type Workspace struct {
 	bufferPool sync.Pool
 }
 
-// DefaultWorkspace is the default workspace used by non-workspace-aware APIs.
+// DefaultWorkspace is the default workspace, useful for tests.
 // If your application does not need to recreate groupcache resources,
-// you should use the non-workspace-aware APIs.
-// This is likely the most common case.
+// you can use this default workspace as well.
 var DefaultWorkspace = NewWorkspace()
 
-// NewWorkspace creates an explicit workspace for workspace-aware APIs.
-// If your application needs to recreate groupcache resources at some
-// point, you should use the workspace-aware APIs.
-// In order to release current groupcache resources, your application
-// would drop all references to the workspace.
+// NewWorkspace creates new workspace.
 func NewWorkspace() *Workspace {
 	return &Workspace{
 		groups: make(map[string]*Group),
