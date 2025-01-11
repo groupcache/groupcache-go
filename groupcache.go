@@ -616,6 +616,8 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 			return
 		}
 
+		// now we will evict oldest non-expired key.
+
 		// TODO(bradfitz): this is good-enough-for-now logic.
 		// It should be something based on measurements and/or
 		// respecting the costs of different resources.
