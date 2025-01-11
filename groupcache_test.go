@@ -333,7 +333,7 @@ func TestPeers(t *testing.T) {
 	const mainCacheWeight = 8
 	const hotCacheWeight = 1
 	testGroup := newGroup(DefaultWorkspace, "TestPeers-group", purgeExpired,
-		cacheSize, mainCacheWeight, hotCacheWeight, GetterFunc(getter), peerList)
+		cacheSize, mainCacheWeight, hotCacheWeight, GetterFunc(getter), peerList, nil)
 	run := func(name string, n int, wantSummary string) {
 		// Reset counters
 		localHits = 0
@@ -465,9 +465,10 @@ func TestNoDedup(t *testing.T) {
 	const mainCacheWeight = 8
 	const hotCacheWeight = 1
 	g := newGroup(DefaultWorkspace, "testgroup", purgeExpired, 1024,
-		mainCacheWeight, hotCacheWeight, GetterFunc(func(_ context.Context, key string, dest Sink) error {
+		mainCacheWeight, hotCacheWeight, GetterFunc(func(_ context.Context,
+			key string, dest Sink) error {
 			return dest.SetString(testval, time.Time{})
-		}), nil)
+		}), nil, nil)
 
 	orderedGroup := &orderedFlightGroup{
 		stage1: make(chan bool),
@@ -554,7 +555,7 @@ func TestContextDeadlineOnPeer(t *testing.T) {
 	const hotCacheWeight = 1
 	testGroup := newGroup(DefaultWorkspace, "TestContextDeadlineOnPeer-group",
 		purgeExpired, cacheSize, mainCacheWeight, hotCacheWeight,
-		GetterFunc(getter), peerList)
+		GetterFunc(getter), peerList, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*300)
 	defer cancel()

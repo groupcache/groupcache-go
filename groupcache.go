@@ -27,6 +27,7 @@ package groupcache
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -35,20 +36,7 @@ import (
 	pb "github.com/modernprogram/groupcache/v2/groupcachepb"
 	"github.com/modernprogram/groupcache/v2/lru"
 	"github.com/modernprogram/groupcache/v2/singleflight"
-	"github.com/sirupsen/logrus"
 )
-
-var logger Logger
-
-// SetLogger - this is legacy to provide backwards compatibility with logrus.
-func SetLogger(log *logrus.Entry) {
-	logger = LogrusLogger{Entry: log}
-}
-
-// SetLoggerFromLogger - set the logger to an implementation of the Logger interface
-func SetLoggerFromLogger(log Logger) {
-	logger = log
-}
 
 // A Getter loads data for a key.
 type Getter interface {
@@ -93,6 +81,19 @@ type Options struct {
 	HotCacheWeight  int64
 	MainCacheWeight int64
 	Getter          Getter
+
+	// Logger is optional pluggable logger.
+	// If undefined, groupcache won't log anything.
+	// If defined, groupcache will log errors retrieving keys from peers.
+	// slog.Defaut() creates a logger that satifiest this interface.
+	Logger Logger
+}
+
+// Logger is interface for pluggable logger.
+// slog.Defaut() creates a logger that satifiest this interface.
+type Logger interface {
+	Info(msg string, args ...any)
+	Error(msg string, args ...any)
 }
 
 // NewGroupWithWorkspace creates a coordinated group-aware Getter from a Getter.
@@ -116,7 +117,7 @@ func NewGroupWithWorkspace(options Options) *Group {
 
 	return newGroup(options.Workspace, options.Name, options.PurgeExpired,
 		options.CacheBytes, options.MainCacheWeight, options.HotCacheWeight,
-		options.Getter, nil)
+		options.Getter, nil, options.Logger)
 }
 
 /*
@@ -150,7 +151,8 @@ func DeregisterGroup(name string) {
 
 // If peers is nil, the peerPicker is called via a sync.Once to initialize it.
 func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
-	mainCacheWeight, hotCacheWeight int64, getter Getter, peers PeerPicker) *Group {
+	mainCacheWeight, hotCacheWeight int64, getter Getter, peers PeerPicker,
+	logger Logger) *Group {
 	if getter == nil {
 		panic("nil Getter")
 	}
@@ -162,6 +164,7 @@ func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
 	}
 	g := &Group{
 		ws:              ws,
+		logger:          logger,
 		name:            name,
 		getter:          getter,
 		peers:           peers,
@@ -225,6 +228,7 @@ func callInitPeerServer(ws *Workspace) {
 // a group of 1 or more machines.
 type Group struct {
 	ws         *Workspace
+	logger     Logger
 	name       string
 	getter     Getter
 	peersOnce  sync.Once
@@ -495,13 +499,12 @@ func (g *Group) load(ctx context.Context, key string, dest Sink, crosstalkAllowe
 				return nil, err
 			}
 
-			if logger != nil {
-				logger.Error().
-					WithFields(map[string]interface{}{
-						"err":      err,
-						"key":      key,
-						"category": "groupcache",
-					}).Printf("error retrieving key from peer '%s'", peer.GetURL())
+			if g.logger != nil {
+				g.logger.Error(fmt.Sprintf("error retrieving key from peer '%s'", peer.GetURL()),
+					"err", err,
+					"key", key,
+					"category", "groupcache",
+				)
 			}
 
 			g.Stats.PeerErrors.Add(1)
