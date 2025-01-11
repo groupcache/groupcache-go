@@ -608,8 +608,15 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 
 		// here we are on mem full condition.
 
-		g.mainCache.removeAllExpired()
-		g.hotCache.removeAllExpired()
+		// attempt to evict expired keys in order to prevent
+		// evicting non-expired keys.
+		mainBytes = g.mainCache.removeAllExpired()
+		hotBytes = g.hotCache.removeAllExpired()
+		if mainBytes+hotBytes <= g.cacheBytes {
+			return
+		}
+
+		// now we will evict oldest non-expired key.
 
 		// TODO(bradfitz): this is good-enough-for-now logic.
 		// It should be something based on measurements and/or
@@ -738,12 +745,13 @@ func (c *cache) removeOldest() {
 }
 
 // removeAllExpired is used on mem full condition.
-func (c *cache) removeAllExpired() {
+func (c *cache) removeAllExpired() int64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.lru != nil {
 		c.lru.RemoveAllExpired()
 	}
+	return c.nbytes
 }
 
 func (c *cache) bytes() int64 {
