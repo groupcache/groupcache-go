@@ -31,15 +31,18 @@ type Hash func(data []byte) uint64
 type Map struct {
 	hash     Hash
 	replicas int
-	keys     []int // Sorted
-	hashMap  map[int]string
+	keys     []entry // Sorted
+}
+
+type entry struct {
+	sum int
+	key string // maps sum back to key
 }
 
 func New(replicas int, fn Hash) *Map {
 	m := &Map{
 		replicas: replicas,
 		hash:     fn,
-		hashMap:  make(map[int]string),
 	}
 	if m.hash == nil {
 		m.hash = fnv1.HashBytes64
@@ -57,11 +60,10 @@ func (m *Map) Add(keys ...string) {
 	for _, key := range keys {
 		for i := 0; i < m.replicas; i++ {
 			hash := int(m.hash([]byte(fmt.Sprintf("%x", md5.Sum([]byte(strconv.Itoa(i)+key))))))
-			m.keys = append(m.keys, hash)
-			m.hashMap[hash] = key
+			m.keys = append(m.keys, entry{sum: hash, key: key})
 		}
 	}
-	sort.Ints(m.keys)
+	sort.Slice(m.keys, func(i, j int) bool { return m.keys[i].sum < m.keys[j].sum })
 }
 
 // Gets the closest item in the hash to the provided key.
@@ -73,12 +75,12 @@ func (m *Map) Get(key string) string {
 	hash := int(m.hash([]byte(key)))
 
 	// Binary search for appropriate replica.
-	idx := sort.Search(len(m.keys), func(i int) bool { return m.keys[i] >= hash })
+	idx := sort.Search(len(m.keys), func(i int) bool { return m.keys[i].sum >= hash })
 
 	// Means we have cycled back to the first replica.
 	if idx == len(m.keys) {
 		idx = 0
 	}
 
-	return m.hashMap[m.keys[idx]]
+	return m.keys[idx].key
 }
