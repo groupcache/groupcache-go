@@ -598,6 +598,26 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 	}
 	c.add(key, value)
 
+	{
+		mainBytes := g.mainCache.bytes()
+		hotBytes := g.hotCache.bytes()
+		if mainBytes+hotBytes <= g.cacheBytes {
+			return // mem is not full
+		}
+	}
+
+	{
+		// first attempt to evict expired keys in order to prevent
+		// evicting non-expired keys.
+		mainBytes := g.mainCache.removeAllExpired()
+		hotBytes := g.hotCache.removeAllExpired()
+		if mainBytes+hotBytes <= g.cacheBytes {
+			return // mem no longer full
+		}
+	}
+
+	// now we will evict oldest non-expired keys.
+
 	// Evict items from cache(s) if necessary.
 	for {
 		mainBytes := g.mainCache.bytes()
@@ -607,16 +627,6 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 		}
 
 		// here we are on mem full condition.
-
-		// attempt to evict expired keys in order to prevent
-		// evicting non-expired keys.
-		mainBytes = g.mainCache.removeAllExpired()
-		hotBytes = g.hotCache.removeAllExpired()
-		if mainBytes+hotBytes <= g.cacheBytes {
-			return
-		}
-
-		// now we will evict oldest non-expired key.
 
 		// TODO(bradfitz): this is good-enough-for-now logic.
 		// It should be something based on measurements and/or
