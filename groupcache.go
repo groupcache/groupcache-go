@@ -141,12 +141,11 @@ func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
 		cacheBytes:      cacheBytes,
 		mainCacheWeight: mainCacheWeight,
 		hotCacheWeight:  hotCacheWeight,
+		purgeExpired:    purgeExpired,
 		loadGroup:       &singleflight.Group{},
 		setGroup:        &singleflight.Group{},
 		removeGroup:     &singleflight.Group{},
 	}
-	g.mainCache.purgeExpired = purgeExpired
-	g.hotCache.purgeExpired = purgeExpired
 	if fn := ws.newGroupHook; fn != nil {
 		fn(g)
 	}
@@ -191,6 +190,7 @@ type Group struct {
 
 	mainCacheWeight int64
 	hotCacheWeight  int64
+	purgeExpired    bool
 
 	// mainCache is a cache of the keys for which this process
 	// (amongst its peers) is authoritative. That is, this cache
@@ -598,16 +598,16 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 	}
 	c.add(key, value)
 
-	{
-		mainBytes := g.mainCache.bytes()
-		hotBytes := g.hotCache.bytes()
-		if mainBytes+hotBytes <= g.cacheBytes {
-			return // mem is not full
+	if g.purgeExpired {
+		{
+			mainBytes := g.mainCache.bytes()
+			hotBytes := g.hotCache.bytes()
+			if mainBytes+hotBytes <= g.cacheBytes {
+				return // mem is not full
+			}
 		}
-	}
 
-	{
-		// first attempt to evict expired keys in order to prevent
+		// first, attempt to evict only expired keys in order to prevent
 		// evicting non-expired keys.
 		mainBytes := g.mainCache.removeAllExpired()
 		hotBytes := g.hotCache.removeAllExpired()
@@ -616,6 +616,7 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 		}
 	}
 
+	// mem is still full.
 	// now we will evict oldest non-expired keys.
 
 	// Evict items from cache(s) if necessary.
@@ -623,7 +624,7 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 		mainBytes := g.mainCache.bytes()
 		hotBytes := g.hotCache.bytes()
 		if mainBytes+hotBytes <= g.cacheBytes {
-			return
+			return // mem no longer full
 		}
 
 		// here we are on mem full condition.
@@ -684,7 +685,6 @@ type cache struct {
 	nhit, nget                int64
 	nevict                    int64 // number of evictions
 	nevictNonExpiredOnMemFull int64 // number of evictions for non-expired items on mem full condition
-	purgeExpired              bool
 }
 
 func (c *cache) stats() CacheStats {
@@ -714,7 +714,6 @@ func (c *cache) add(key string, value ByteView) {
 					c.nevictNonExpiredOnMemFull++
 				}
 			},
-			PurgeExpired: c.purgeExpired,
 		}
 	}
 	c.lru.Add(key, value, value.Expire())

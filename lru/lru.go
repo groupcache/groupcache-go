@@ -39,10 +39,6 @@ type Cache struct {
 	// Defaults to time.Now()
 	Now NowFunc
 
-	// PurgeExpired enables removing all expired keys when the
-	// oldest item is removed.
-	PurgeExpired bool
-
 	ll    *list.List
 	cache map[interface{}]*list.Element
 }
@@ -54,6 +50,13 @@ type entry struct {
 	key    Key
 	value  interface{}
 	expire time.Time
+}
+
+func (entry *entry) hasExpired(now time.Time) bool {
+	if entry.expire.IsZero() {
+		return false // expiration not set
+	}
+	return entry.expire.Before(now)
 }
 
 // New creates a new Cache.
@@ -100,7 +103,7 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 	if ele, hit := c.cache[key]; hit {
 		entry := ele.Value.(*entry)
 		// If the entry has expired, remove it from the cache
-		if expired := hasExpired(entry, c.Now()); expired {
+		if expired := entry.hasExpired(c.Now()); expired {
 			const memFull = false
 			c.removeElement(ele, memFull, time.Now())
 			return nil, false
@@ -110,10 +113,6 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 		return entry.value, true
 	}
 	return
-}
-
-func hasExpired(entry *entry, now time.Time) bool {
-	return !entry.expire.IsZero() && entry.expire.Before(now)
 }
 
 // Remove removes the provided key from the cache.
@@ -149,9 +148,6 @@ func (c *Cache) RemoveAllExpired() {
 	if c.cache == nil {
 		return
 	}
-	if !c.PurgeExpired {
-		return
-	}
 	now := c.Now()
 	for {
 		ele := c.ll.Back()
@@ -159,7 +155,7 @@ func (c *Cache) RemoveAllExpired() {
 			break
 		}
 		entry := ele.Value.(*entry)
-		if expired := hasExpired(entry, now); !expired {
+		if expired := entry.hasExpired(now); !expired {
 			break
 		}
 		const memFull = true
@@ -172,7 +168,7 @@ func (c *Cache) removeElement(e *list.Element, memFull bool, now time.Time) {
 	kv := e.Value.(*entry)
 	delete(c.cache, kv.key)
 	if c.OnEvicted != nil {
-		nonExpiredAndMemFull := memFull && !hasExpired(kv, now)
+		nonExpiredAndMemFull := memFull && !kv.hasExpired(now)
 		c.OnEvicted(kv.key, kv.value, nonExpiredAndMemFull)
 	}
 }
