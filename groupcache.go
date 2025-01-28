@@ -65,6 +65,7 @@ func GetGroupWithWorkspace(ws *Workspace, name string) *Group {
 	return g
 }
 
+// Options define settings for group.
 type Options struct {
 	Workspace       *Workspace
 	Name            string
