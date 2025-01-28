@@ -30,11 +30,10 @@ var group = groupcache.NewGroupWithWorkspace(groupcache.Options{
 			v, ok := store[key]
 			if !ok {
 				return fmt.Errorf("key not set")
-			} else {
-				if err := dest.SetBytes([]byte(v), time.Now().Add(10*time.Minute)); err != nil {
-					log.Printf("Failed to set cache value for key '%s' - %v\n", key, err)
-					return err
-				}
+			}
+			if err := dest.SetBytes([]byte(v), time.Now().Add(10*time.Minute)); err != nil {
+				log.Printf("Failed to set cache value for key '%s' - %v\n", key, err)
+				return err
 			}
 
 			return nil
