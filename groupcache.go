@@ -65,6 +65,7 @@ func GetGroupWithWorkspace(ws *Workspace, name string) *Group {
 	return g
 }
 
+// Options define settings for group.
 type Options struct {
 	Workspace       *Workspace
 	Name            string
@@ -648,11 +649,11 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 type CacheType int
 
 const (
-	// The MainCache is the cache for items that this peer is the
+	// MainCache is the cache for items that this peer is the
 	// owner for.
 	MainCache CacheType = iota + 1
 
-	// The HotCache is the cache for items that seem popular
+	// HotCache is the cache for items that seem popular
 	// enough to replicate to this node, even though it's not the
 	// owner.
 	HotCache

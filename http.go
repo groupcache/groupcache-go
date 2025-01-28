@@ -261,8 +261,8 @@ type httpGetter struct {
 	ws           *Workspace
 }
 
-func (p *httpGetter) GetURL() string {
-	return p.baseURL
+func (h *httpGetter) GetURL() string {
+	return h.baseURL
 }
 
 type request interface {

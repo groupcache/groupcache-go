@@ -37,7 +37,7 @@ type ByteView struct {
 	e time.Time
 }
 
-// Returns the expire time associated with this view
+// Expire returns the expire time associated with this view.
 func (v ByteView) Expire() time.Time {
 	return v.e
 }

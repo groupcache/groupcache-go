@@ -1,3 +1,4 @@
+// Package main implements a test server.
 package main
 
 import (
@@ -25,16 +26,15 @@ var group = groupcache.NewGroupWithWorkspace(groupcache.Options{
 	PurgeExpired: purgeExpired,
 	CacheBytes:   64 << 20,
 	Getter: groupcache.GetterFunc(
-		func(ctx context.Context, key string, dest groupcache.Sink) error {
+		func(_ context.Context, key string, dest groupcache.Sink) error {
 			fmt.Printf("Get Called\n")
 			v, ok := store[key]
 			if !ok {
 				return fmt.Errorf("key not set")
-			} else {
-				if err := dest.SetBytes([]byte(v), time.Now().Add(10*time.Minute)); err != nil {
-					log.Printf("Failed to set cache value for key '%s' - %v\n", key, err)
-					return err
-				}
+			}
+			if err := dest.SetBytes([]byte(v), time.Now().Add(10*time.Minute)); err != nil {
+				log.Printf("Failed to set cache value for key '%s' - %v\n", key, err)
+				return err
 			}
 
 			return nil
@@ -53,7 +53,7 @@ func main() {
 	pool := groupcache.NewHTTPPoolOptsWithWorkspace(groupcache.DefaultWorkspace, *serverURL, &groupcache.HTTPPoolOptions{})
 	pool.Set(p...)
 
-	http.HandleFunc("/set", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/set", func(_ http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		key := r.FormValue("key")
 		value := r.FormValue("value")

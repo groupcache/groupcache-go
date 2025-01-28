@@ -284,7 +284,7 @@ func addrToURL(addr []string) []string {
 
 func awaitAddrReady(_ /*t*/ *testing.T, addr string, wg *sync.WaitGroup) {
 	defer wg.Done()
-	const max = 1 * time.Second
+	const maxDelay = 1 * time.Second
 	tries := 0
 	for {
 		tries++
@@ -294,8 +294,8 @@ func awaitAddrReady(_ /*t*/ *testing.T, addr string, wg *sync.WaitGroup) {
 			return
 		}
 		delay := time.Duration(tries) * 25 * time.Millisecond
-		if delay > max {
-			delay = max
+		if delay > maxDelay {
+			delay = maxDelay
 		}
 		time.Sleep(delay)
 	}
