@@ -141,6 +141,7 @@ func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
 		cacheBytes:      cacheBytes,
 		mainCacheWeight: mainCacheWeight,
 		hotCacheWeight:  hotCacheWeight,
+		purgeExpired:    purgeExpired,
 		loadGroup:       &singleflight.Group{},
 		setGroup:        &singleflight.Group{},
 		removeGroup:     &singleflight.Group{},
@@ -191,6 +192,7 @@ type Group struct {
 
 	mainCacheWeight int64
 	hotCacheWeight  int64
+	purgeExpired    bool
 
 	// mainCache is a cache of the keys for which this process
 	// (amongst its peers) is authoritative. That is, this cache
@@ -606,7 +608,7 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 		}
 	}
 
-	{
+	if g.purgeExpired {
 		// first attempt to evict expired keys in order to prevent
 		// evicting non-expired keys.
 		mainBytes := g.mainCache.removeAllExpired()
@@ -714,7 +716,6 @@ func (c *cache) add(key string, value ByteView) {
 					c.nevictNonExpiredOnMemFull++
 				}
 			},
-			PurgeExpired: c.purgeExpired,
 		}
 	}
 	c.lru.Add(key, value, value.Expire())

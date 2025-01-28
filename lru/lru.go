@@ -39,10 +39,6 @@ type Cache struct {
 	// Defaults to time.Now()
 	Now NowFunc
 
-	// PurgeExpired enables removing all expired keys when the
-	// oldest item is removed.
-	PurgeExpired bool
-
 	ll    *list.List
 	cache map[interface{}]*list.Element
 }
@@ -147,9 +143,6 @@ func (c *Cache) RemoveOldest() {
 // RemoveAllExpired is used on mem full condition.
 func (c *Cache) RemoveAllExpired() {
 	if c.cache == nil {
-		return
-	}
-	if !c.PurgeExpired {
 		return
 	}
 	now := c.Now()
