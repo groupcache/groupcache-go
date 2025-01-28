@@ -146,8 +146,6 @@ func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
 		setGroup:        &singleflight.Group{},
 		removeGroup:     &singleflight.Group{},
 	}
-	g.mainCache.purgeExpired = purgeExpired
-	g.hotCache.purgeExpired = purgeExpired
 	if fn := ws.newGroupHook; fn != nil {
 		fn(g)
 	}
@@ -686,7 +684,6 @@ type cache struct {
 	nhit, nget                int64
 	nevict                    int64 // number of evictions
 	nevictNonExpiredOnMemFull int64 // number of evictions for non-expired items on mem full condition
-	purgeExpired              bool
 }
 
 func (c *cache) stats() CacheStats {
