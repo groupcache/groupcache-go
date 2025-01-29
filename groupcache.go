@@ -216,6 +216,11 @@ type Stats struct {
 	CrosstalkRefusals        AtomicInt // refusals for additional crosstalks
 }
 
+// Name returns the name of the group.
+func (g *Group) Name() string {
+	return g.name
+}
+
 func (g *Group) initPeers() {
 	if g.peers == nil {
 		g.peers = getPeers(g.ws, g.name)
