@@ -13,12 +13,6 @@ type Workspace struct {
 	mu     sync.RWMutex
 	groups map[string]*Group
 
-	initPeerServerOnce sync.Once
-	initPeerServer     func()
-
-	// newGroupHook, if non-nil, is called right after a new group is created.
-	newGroupHook func(*Group)
-
 	bufferPool sync.Pool
 }
 
