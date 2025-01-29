@@ -104,8 +104,8 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 		entry := ele.Value.(*entry)
 		// If the entry has expired, remove it from the cache
 		if expired := entry.hasExpired(c.Now()); expired {
-			const memFull = false
-			c.removeElement(ele, memFull, time.Now())
+			const nonExpiredAndMemFull = false // mem is not full
+			c.removeElement(ele, nonExpiredAndMemFull)
 			return nil, false
 		}
 
@@ -121,8 +121,8 @@ func (c *Cache) Remove(key Key) {
 		return
 	}
 	if ele, hit := c.cache[key]; hit {
-		const memFull = false // memFull is used in stats for evictions
-		c.removeElement(ele, memFull, time.Now())
+		const nonExpiredAndMemFull = false // mem is not full
+		c.removeElement(ele, nonExpiredAndMemFull)
 	}
 }
 
@@ -138,8 +138,12 @@ func (c *Cache) RemoveOldest() {
 	if ele == nil {
 		return
 	}
-	const memFull = true
-	c.removeElement(ele, memFull, time.Now())
+
+	entry := ele.Value.(*entry)
+	expired := entry.hasExpired(time.Now())
+	nonExpiredAndMemFull := !expired // mem is full
+
+	c.removeElement(ele, nonExpiredAndMemFull)
 }
 
 // RemoveAllExpired removes all expired items from the cache.
@@ -158,17 +162,16 @@ func (c *Cache) RemoveAllExpired() {
 		if expired := entry.hasExpired(now); !expired {
 			break
 		}
-		const memFull = true
-		c.removeElement(ele, memFull, now)
+		const nonExpiredAndMemFull = false // expired
+		c.removeElement(ele, nonExpiredAndMemFull)
 	}
 }
 
-func (c *Cache) removeElement(e *list.Element, memFull bool, now time.Time) {
+func (c *Cache) removeElement(e *list.Element, nonExpiredAndMemFull bool) {
 	c.ll.Remove(e)
 	kv := e.Value.(*entry)
 	delete(c.cache, kv.key)
 	if c.OnEvicted != nil {
-		nonExpiredAndMemFull := memFull && !kv.hasExpired(now)
 		c.OnEvicted(kv.key, kv.value, nonExpiredAndMemFull)
 	}
 }
