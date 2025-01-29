@@ -113,13 +113,6 @@ func NewGroupWithWorkspace(options Options) *Group {
 		options.Getter, nil, options.Logger)
 }
 
-// DeregisterGroupWithWorkspace removes group from group pool
-func DeregisterGroupWithWorkspace(ws *Workspace, name string) {
-	ws.mu.Lock()
-	delete(ws.groups, name)
-	ws.mu.Unlock()
-}
-
 // If peers is nil, the peerPicker is called via a sync.Once to initialize it.
 func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
 	mainCacheWeight, hotCacheWeight int64, getter Getter, peers PeerPicker,
@@ -129,7 +122,6 @@ func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
 	}
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
-	ws.initPeerServerOnce.Do(func() { callInitPeerServer(ws) })
 	if _, dup := ws.groups[name]; dup {
 		panic("duplicate registration of group " + name)
 	}
@@ -147,35 +139,8 @@ func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
 		setGroup:        &singleflight.Group{},
 		removeGroup:     &singleflight.Group{},
 	}
-	if fn := ws.newGroupHook; fn != nil {
-		fn(g)
-	}
 	ws.groups[name] = g
 	return g
-}
-
-// RegisterNewGroupHookWithWorkspace registers a hook that is run each time
-// a group is created.
-func RegisterNewGroupHookWithWorkspace(ws *Workspace, fn func(*Group)) {
-	if ws.newGroupHook != nil {
-		panic("RegisterNewGroupHook called more than once")
-	}
-	ws.newGroupHook = fn
-}
-
-// RegisterServerStartWithWorkspace registers a hook that is run when the first
-// group is created.
-func RegisterServerStartWithWorkspace(ws *Workspace, fn func()) {
-	if ws.initPeerServer != nil {
-		panic("RegisterServerStart called more than once")
-	}
-	ws.initPeerServer = fn
-}
-
-func callInitPeerServer(ws *Workspace) {
-	if ws.initPeerServer != nil {
-		ws.initPeerServer()
-	}
 }
 
 // A Group is a cache namespace and associated data loaded spread over
@@ -249,11 +214,6 @@ type Stats struct {
 	LocalLoadErrs            AtomicInt // total bad local loads
 	ServerRequests           AtomicInt // gets that came over the network from peers
 	CrosstalkRefusals        AtomicInt // refusals for additional crosstalks
-}
-
-// Name returns the name of the group.
-func (g *Group) Name() string {
-	return g.name
 }
 
 func (g *Group) initPeers() {
