@@ -115,13 +115,11 @@ type HttpTransportOptions struct {
 
 // HttpTransport defines the HTTP transport
 type HttpTransport struct {
-	opts        HttpTransportOptions
-	instance    GroupCacheInstance
-	wg          sync.WaitGroup
-	listener    net.Listener
-	server      *http.Server
-	tlsListener net.Listener
-	tlsServer   *http.Server
+	opts     HttpTransportOptions
+	instance GroupCacheInstance
+	wg       sync.WaitGroup
+	listener net.Listener
+	server   *http.Server
 }
 
 // NewHttpTransport returns a new HttpTransport instance based on the provided HttpTransportOptions.
@@ -164,6 +162,10 @@ func NewHttpTransport(opts HttpTransportOptions) *HttpTransport {
 	}
 }
 
+func (t *HttpTransport) tls() bool {
+	return t.opts.TLSConfig != nil
+}
+
 // Register registers the provided instance with this transport.
 func (t *HttpTransport) Register(instance GroupCacheInstance) {
 	t.instance = instance
@@ -180,38 +182,36 @@ func (t *HttpTransport) ListenAndServe(ctx context.Context, address string) erro
 	mux.Handle(t.opts.BasePath, t)
 
 	var err error
+
 	t.listener, err = net.Listen("tcp", address)
 	if err != nil {
 		return fmt.Errorf("while starting HTTP listener: %w", err)
 	}
 
-	if t.opts.TLSConfig != nil {
-		t.tlsListener = tls.NewListener(t.listener, t.opts.TLSConfig)
-		t.tlsServer = &http.Server{
-			Handler: mux,
-		}
-	} else {
-		t.server = &http.Server{
-			Handler: mux,
-		}
+	if t.tls() {
+		t.listener = tls.NewListener(t.listener, t.opts.TLSConfig)
+	}
+
+	t.server = &http.Server{
+		Handler: mux,
 	}
 
 	t.wg.Add(1)
 	go func() {
 		t.opts.Logger.Info(fmt.Sprintf("Listening on %s ....", address))
-		if t.tlsServer != nil {
-			if err := t.tlsServer.Serve(t.tlsListener); err != nil {
-				if !errors.Is(err, http.ErrServerClosed) {
-					t.opts.Logger.Error("while starting HTTPs server", "err", err)
+
+		if err := t.server.Serve(t.listener); err != nil {
+			if !errors.Is(err, http.ErrServerClosed) {
+				var proto string
+				if t.tls() {
+					proto = "HTTPS"
+				} else {
+					proto = "HTTP"
 				}
-			}
-		} else {
-			if err := t.server.Serve(t.listener); err != nil {
-				if !errors.Is(err, http.ErrServerClosed) {
-					t.opts.Logger.Error("while starting HTTP server", "err", err)
-				}
+				t.opts.Logger.Error(fmt.Sprintf("while starting %s server", proto), "err", err)
 			}
 		}
+
 		t.wg.Done()
 	}()
 
@@ -221,25 +221,15 @@ func (t *HttpTransport) ListenAndServe(ctx context.Context, address string) erro
 
 // Shutdown shuts down the server started when calling ListenAndServe()
 func (t *HttpTransport) Shutdown(ctx context.Context) error {
-	if t.tlsServer != nil {
-		if err := t.tlsServer.Shutdown(ctx); err != nil {
-			return err
-		}
-	} else {
-		if err := t.server.Shutdown(ctx); err != nil {
-			return err
-		}
+	if err := t.server.Shutdown(ctx); err != nil {
+		return err
 	}
-
 	t.wg.Wait()
 	return nil
 }
 
 // ListenAddress returns the address the server is listening on after calling ListenAndServe().
 func (t *HttpTransport) ListenAddress() string {
-	if t.tlsListener != nil {
-		return t.tlsListener.Addr().String()
-	}
 	return t.listener.Addr().String()
 }
 
