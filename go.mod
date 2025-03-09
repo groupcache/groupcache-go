@@ -1,11 +1,11 @@
 module github.com/modernprogram/groupcache/v2
 
-go 1.23.5
+go 1.24.1
 
 require (
 	github.com/segmentio/fasthash v1.0.3
 	github.com/stretchr/testify v1.8.4
-	google.golang.org/protobuf v1.36.4
+	google.golang.org/protobuf v1.36.5
 )
 
 require (
