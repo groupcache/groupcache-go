@@ -1,3 +1,8 @@
+[![license](http://img.shields.io/badge/license-Apache-blue.svg)](https://github.com/modernprogram/groupcache/blob/main/LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/modernprogram/groupcache)](https://goreportcard.com/report/github.com/modernprogram/groupcache)
+[![Go Reference](https://pkg.go.dev/badge/github.com/modernprogram/groupcache.svg)](https://pkg.go.dev/github.com/modernprogram/groupcache)
+
+
 # groupcache
 
 A modified version of [group cache](https://github.com/golang/groupcache) with
