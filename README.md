@@ -1,4 +1,4 @@
-[![license](http://img.shields.io/badge/license-Apache-blue.svg)](https://github.com/modernprogram/groupcache/blob/main/LICENSE)
+[![license](http://img.shields.io/badge/license-Apache-blue.svg)](https://github.com/modernprogram/groupcache/blob/master/LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/modernprogram/groupcache)](https://goreportcard.com/report/github.com/modernprogram/groupcache)
 [![Go Reference](https://pkg.go.dev/badge/github.com/modernprogram/groupcache.svg)](https://pkg.go.dev/github.com/modernprogram/groupcache)
 
