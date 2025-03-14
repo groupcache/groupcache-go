@@ -9,7 +9,7 @@ import (
 	"github.com/modernprogram/groupcache/v2"
 )
 
-func ExampleUsage() {
+func Example() {
 	/*
 		// Keep track of peers in our cluster and add our instance to the pool `http://localhost:8080`
 		pool := groupcache.NewHTTPPoolOpts("http://localhost:8080", &groupcache.HTTPPoolOptions{})
