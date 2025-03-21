@@ -126,7 +126,7 @@ func NewGroupWithWorkspace(options Options) *Group {
 }
 
 // If peers is nil, the peerPicker is called via a sync.Once to initialize it.
-func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
+func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytesLimit,
 	mainCacheWeight, hotCacheWeight int64,
 	expiredKeysEvictionInterval time.Duration, getter Getter,
 	peers PeerPicker, logger Logger) *Group {
@@ -144,7 +144,7 @@ func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
 		name:            name,
 		getter:          getter,
 		peers:           peers,
-		cacheBytesLimit: cacheBytes,
+		cacheBytesLimit: cacheBytesLimit,
 		mainCacheWeight: mainCacheWeight,
 		hotCacheWeight:  hotCacheWeight,
 		purgeExpired:    purgeExpired,
