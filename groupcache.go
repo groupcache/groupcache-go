@@ -32,6 +32,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"weak"
 
 	pb "github.com/modernprogram/groupcache/v2/groupcachepb"
 	"github.com/modernprogram/groupcache/v2/lru"
@@ -69,11 +70,18 @@ func GetGroupWithWorkspace(ws *Workspace, name string) *Group {
 type Options struct {
 	Workspace       *Workspace
 	Name            string
-	PurgeExpired    bool
-	CacheBytes      int64
+	CacheBytesLimit int64
 	HotCacheWeight  int64
 	MainCacheWeight int64
 	Getter          Getter
+
+	// PurgeExpired enables evicting expired keys on memory full condition.
+	PurgeExpired bool
+
+	// ExpiredKeysEvictionInterval sets interval for periodic eviction of expired keys.
+	// If unset, defaults to 30-minute period.
+	// Set to -1 to disable periodic eviction of expired keys.
+	ExpiredKeysEvictionInterval time.Duration
 
 	// Logger is optional pluggable logger.
 	// If undefined, groupcache won't log anything.
@@ -108,15 +116,20 @@ func NewGroupWithWorkspace(options Options) *Group {
 		options.HotCacheWeight = 1
 	}
 
+	if options.ExpiredKeysEvictionInterval == 0 {
+		options.ExpiredKeysEvictionInterval = 30 * time.Minute
+	}
+
 	return newGroup(options.Workspace, options.Name, options.PurgeExpired,
-		options.CacheBytes, options.MainCacheWeight, options.HotCacheWeight,
-		options.Getter, nil, options.Logger)
+		options.CacheBytesLimit, options.MainCacheWeight, options.HotCacheWeight,
+		options.ExpiredKeysEvictionInterval, options.Getter, nil, options.Logger)
 }
 
 // If peers is nil, the peerPicker is called via a sync.Once to initialize it.
 func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
-	mainCacheWeight, hotCacheWeight int64, getter Getter, peers PeerPicker,
-	logger Logger) *Group {
+	mainCacheWeight, hotCacheWeight int64,
+	expiredKeysEvictionInterval time.Duration, getter Getter,
+	peers PeerPicker, logger Logger) *Group {
 	if getter == nil {
 		panic("nil Getter")
 	}
@@ -131,7 +144,7 @@ func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
 		name:            name,
 		getter:          getter,
 		peers:           peers,
-		cacheBytes:      cacheBytes,
+		cacheBytesLimit: cacheBytes,
 		mainCacheWeight: mainCacheWeight,
 		hotCacheWeight:  hotCacheWeight,
 		purgeExpired:    purgeExpired,
@@ -140,19 +153,42 @@ func newGroup(ws *Workspace, name string, purgeExpired bool, cacheBytes,
 		removeGroup:     &singleflight.Group{},
 	}
 	ws.groups[name] = g
+
+	if expiredKeysEvictionInterval > 0 {
+		// launch goroutine to periodically evict expired keys
+		weakGroup := weak.Make(g)
+		go evictExpiredKeys(weakGroup, expiredKeysEvictionInterval)
+	}
+
 	return g
+}
+
+// evictExpiredKeys periodically evicts all expired keys.
+func evictExpiredKeys(weakGroup weak.Pointer[Group],
+	expiredKeysEvictionInterval time.Duration) {
+	c := time.Tick(expiredKeysEvictionInterval)
+	for range c {
+		strong := weakGroup.Value()
+		if strong == nil {
+			// group has been garbage collected,
+			// exit to release goroutine resources
+			return
+		}
+		strong.removeAllExpired()
+		strong = nil // make sure we got rid of the strong pointer
+	}
 }
 
 // A Group is a cache namespace and associated data loaded spread over
 // a group of 1 or more machines.
 type Group struct {
-	ws         *Workspace
-	logger     Logger
-	name       string
-	getter     Getter
-	peersOnce  sync.Once
-	peers      PeerPicker
-	cacheBytes int64 // limit for sum of mainCache and hotCache size
+	ws              *Workspace
+	logger          Logger
+	name            string
+	getter          Getter
+	peersOnce       sync.Once
+	peers           PeerPicker
+	cacheBytesLimit int64 // limit for sum of mainCache and hotCache size
 
 	mainCacheWeight int64
 	hotCacheWeight  int64
@@ -518,7 +554,7 @@ func (g *Group) removeFromPeer(ctx context.Context, peer ProtoGetter, key string
 }
 
 func (g *Group) lookupCache(key string) (value ByteView, ok bool) {
-	if g.cacheBytes <= 0 {
+	if g.cacheBytesLimit <= 0 {
 		return
 	}
 	value, ok = g.mainCache.get(key)
@@ -530,7 +566,7 @@ func (g *Group) lookupCache(key string) (value ByteView, ok bool) {
 }
 
 func (g *Group) localSet(key string, value []byte, expire time.Time, cache *cache) {
-	if g.cacheBytes <= 0 {
+	if g.cacheBytesLimit <= 0 {
 		return
 	}
 
@@ -547,7 +583,7 @@ func (g *Group) localSet(key string, value []byte, expire time.Time, cache *cach
 
 func (g *Group) localRemove(key string) {
 	// Clear key from our local cache
-	if g.cacheBytes <= 0 {
+	if g.cacheBytesLimit <= 0 {
 		return
 	}
 
@@ -558,8 +594,14 @@ func (g *Group) localRemove(key string) {
 	})
 }
 
+func (g *Group) removeAllExpired() int64 {
+	mainBytes := g.mainCache.removeAllExpired()
+	hotBytes := g.hotCache.removeAllExpired()
+	return mainBytes + hotBytes
+}
+
 func (g *Group) populateCache(key string, value ByteView, c *cache) {
-	if g.cacheBytes <= 0 {
+	if g.cacheBytesLimit <= 0 {
 		return
 	}
 	c.add(key, value)
@@ -568,16 +610,14 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 		{
 			mainBytes := g.mainCache.bytes()
 			hotBytes := g.hotCache.bytes()
-			if mainBytes+hotBytes <= g.cacheBytes {
+			if mainBytes+hotBytes <= g.cacheBytesLimit {
 				return // mem is not full
 			}
 		}
 
 		// first, attempt to evict only expired keys in order to prevent
 		// evicting non-expired keys.
-		mainBytes := g.mainCache.removeAllExpired()
-		hotBytes := g.hotCache.removeAllExpired()
-		if mainBytes+hotBytes <= g.cacheBytes {
+		if mainAndHotBytes := g.removeAllExpired(); mainAndHotBytes <= g.cacheBytesLimit {
 			return // mem no longer full
 		}
 	}
@@ -589,7 +629,7 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 	for {
 		mainBytes := g.mainCache.bytes()
 		hotBytes := g.hotCache.bytes()
-		if mainBytes+hotBytes <= g.cacheBytes {
+		if mainBytes+hotBytes <= g.cacheBytesLimit {
 			return // mem no longer full
 		}
 
