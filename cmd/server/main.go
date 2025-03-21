@@ -19,27 +19,29 @@ import (
 var store = map[string]string{}
 
 const purgeExpired = true
+const ttl = 10 * time.Second
+const expiredKeysEvictionInterval = 20 * time.Second
 
 var group = groupcache.NewGroupWithWorkspace(groupcache.Options{
-	Workspace:    groupcache.DefaultWorkspace,
-	Name:         "cache1",
-	PurgeExpired: purgeExpired,
-	CacheBytes:   64 << 20,
+	Workspace:       groupcache.DefaultWorkspace,
+	Name:            "cache1",
+	PurgeExpired:    purgeExpired,
+	CacheBytesLimit: 64 << 20,
 	Getter: groupcache.GetterFunc(
 		func(_ context.Context, key string, dest groupcache.Sink) error {
-			fmt.Printf("Get Called\n")
+			fmt.Printf("Get Called - loading key=%s from primary source\n", key)
 			v, ok := store[key]
 			if !ok {
 				return fmt.Errorf("key not set")
 			}
-			if err := dest.SetBytes([]byte(v), time.Now().Add(10*time.Minute)); err != nil {
+			if err := dest.SetBytes([]byte(v), time.Now().Add(ttl)); err != nil {
 				log.Printf("Failed to set cache value for key '%s' - %v\n", key, err)
 				return err
 			}
-
 			return nil
 		},
 	),
+	ExpiredKeysEvictionInterval: expiredKeysEvictionInterval,
 })
 
 func main() {
@@ -97,8 +99,13 @@ func main() {
 	}()
 
 	fmt.Println("Running...")
+	fmt.Println()
+	fmt.Printf("TTL: %v\n", ttl)
+	fmt.Printf("expiredKeysEvictionInterval: %v\n", expiredKeysEvictionInterval)
+	fmt.Println()
 	fmt.Println("Try: curl -d key=key1 -d value=value1 localhost:8081/set")
 	fmt.Println("Try: curl -d key=key1 localhost:8081/cache")
+	fmt.Println()
 	termChan := make(chan os.Signal, 1)
 	signal.Notify(termChan, syscall.SIGINT, syscall.SIGTERM)
 	<-termChan
