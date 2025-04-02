@@ -5,7 +5,7 @@ go 1.24.1
 require (
 	github.com/segmentio/fasthash v1.0.3
 	github.com/stretchr/testify v1.10.0
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/protobuf v1.36.6
 )
 
 require (

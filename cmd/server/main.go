@@ -28,8 +28,20 @@ var group = groupcache.NewGroupWithWorkspace(groupcache.Options{
 	PurgeExpired:    purgeExpired,
 	CacheBytesLimit: 64 << 20,
 	Getter: groupcache.GetterFunc(
-		func(_ context.Context, key string, dest groupcache.Sink) error {
-			fmt.Printf("Get Called - loading key=%s from primary source\n", key)
+		func(ctx context.Context, key string, dest groupcache.Sink) error {
+
+			var ctx1, ctx2 string
+			if ctx != nil {
+				if ctxValue := ctx.Value(groupcache.GroupcacheContextKey1); ctxValue != nil {
+					ctx1 = ctxValue.(string)
+				}
+				if ctxValue := ctx.Value(groupcache.GroupcacheContextKey2); ctxValue != nil {
+					ctx2 = ctxValue.(string)
+				}
+			}
+
+			fmt.Printf("Get Called - loading key=%s from primary source (ctx1:%s ctx2:%s)\n",
+				key, ctx1, ctx2)
 			v, ok := store[key]
 			if !ok {
 				return fmt.Errorf("key not set")
@@ -81,6 +93,42 @@ func main() {
 		w.Write([]byte{'\n'})
 	})
 
+	http.HandleFunc("/cachewithcontext", func(w http.ResponseWriter, r *http.Request) {
+		key := r.FormValue("key")
+
+		fmt.Printf("Fetching value for key '%s'\n", key)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		ctx = context.WithValue(ctx, groupcache.GroupcacheContextKey1, "ctxValue1")
+		ctx = context.WithValue(ctx, groupcache.GroupcacheContextKey2, "ctxValue2")
+
+		var b []byte
+		err := group.Get(ctx, key, groupcache.AllocatingByteSliceSink(&b))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		w.Write(b)
+		w.Write([]byte{'\n'})
+	})
+
+	http.HandleFunc("/cachenocontext", func(w http.ResponseWriter, r *http.Request) {
+		key := r.FormValue("key")
+
+		fmt.Printf("Fetching value for key '%s'\n", key)
+
+		var b []byte
+		err := group.Get(nil, key, groupcache.AllocatingByteSliceSink(&b))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		w.Write(b)
+		w.Write([]byte{'\n'})
+	})
+
 	server := http.Server{
 		Addr:    *addr,
 		Handler: pool,
@@ -105,6 +153,8 @@ func main() {
 	fmt.Println()
 	fmt.Println("Try: curl -d key=key1 -d value=value1 localhost:8081/set")
 	fmt.Println("Try: curl -d key=key1 localhost:8081/cache")
+	fmt.Println("Try: curl -d key=key1 localhost:8081/cachewithcontext")
+	fmt.Println("Try: curl -d key=key1 localhost:8081/cachenocontext")
 	fmt.Println()
 	termChan := make(chan os.Signal, 1)
 	signal.Notify(termChan, syscall.SIGINT, syscall.SIGTERM)

@@ -506,10 +506,23 @@ func (g *Group) getLocally(ctx context.Context, key string, dest Sink) (ByteView
 }
 
 func (g *Group) getFromPeer(ctx context.Context, peer ProtoGetter, key string) (ByteView, error) {
+
 	req := &pb.GetRequest{
 		Group: &g.name,
 		Key:   &key,
 	}
+
+	if ctx != nil {
+		if value := ctx.Value(GroupcacheContextKey1); value != nil {
+			s := value.(string)
+			req.Ctx1 = &s
+		}
+		if value := ctx.Value(GroupcacheContextKey2); value != nil {
+			s := value.(string)
+			req.Ctx2 = &s
+		}
+	}
+
 	res := &pb.GetResponse{}
 	err := peer.Get(ctx, req, res)
 	if err != nil {
