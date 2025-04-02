@@ -61,7 +61,8 @@ func main() {
 	flag.Parse()
 
 	p := strings.Split(*peers, ",")
-	pool := groupcache.NewHTTPPoolOptsWithWorkspace(groupcache.DefaultWorkspace, *serverURL, &groupcache.HTTPPoolOptions{})
+	pool := groupcache.NewHTTPPoolOptsWithWorkspace(groupcache.DefaultWorkspace, *serverURL,
+		&groupcache.HTTPPoolOptions{})
 	pool.Set(p...)
 
 	http.HandleFunc("/set", func(_ http.ResponseWriter, r *http.Request) {

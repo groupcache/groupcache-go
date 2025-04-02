@@ -264,6 +264,8 @@ func (g *Group) initPeers() {
 }
 
 // Get retrieves key for library caller, thus crosstalk is allowed.
+// info holds optional user-supplied per-request context fields that are
+// propagated to the peer getter load function.
 func (g *Group) Get(ctx context.Context, key string, dest Sink, info *Info) error {
 	const crosstalkAllowed = true
 	return g.get(ctx, key, dest, crosstalkAllowed, info)
