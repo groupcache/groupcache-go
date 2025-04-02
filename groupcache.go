@@ -47,14 +47,14 @@ type Getter interface {
 	// uniquely describe the loaded data, without an implicit
 	// current time, and without relying on cache expiration
 	// mechanisms.
-	Get(ctx context.Context, key string, dest Sink) error
+	Get(ctx context.Context, key string, dest Sink, info *Info) error
 }
 
 // A GetterFunc implements Getter with a function.
-type GetterFunc func(ctx context.Context, key string, dest Sink) error
+type GetterFunc func(ctx context.Context, key string, dest Sink, info *Info) error
 
-func (f GetterFunc) Get(ctx context.Context, key string, dest Sink) error {
-	return f(ctx, key, dest)
+func (f GetterFunc) Get(ctx context.Context, key string, dest Sink, info *Info) error {
+	return f(ctx, key, dest, info)
 }
 
 // GetGroupWithWorkspace returns the named group previously created with NewGroup, or
@@ -264,18 +264,19 @@ func (g *Group) initPeers() {
 }
 
 // Get retrieves key for library caller, thus crosstalk is allowed.
-func (g *Group) Get(ctx context.Context, key string, dest Sink) error {
+func (g *Group) Get(ctx context.Context, key string, dest Sink, info *Info) error {
 	const crosstalkAllowed = true
-	return g.get(ctx, key, dest, crosstalkAllowed)
+	return g.get(ctx, key, dest, crosstalkAllowed, info)
 }
 
 // GetForPeer retrieves key for peer in a crosstalk request, thus further crosstalk won't be allowed.
-func (g *Group) GetForPeer(ctx context.Context, key string, dest Sink) error {
+func (g *Group) GetForPeer(ctx context.Context, key string, dest Sink, info *Info) error {
 	const crosstalkAllowed = false
-	return g.get(ctx, key, dest, crosstalkAllowed)
+	return g.get(ctx, key, dest, crosstalkAllowed, info)
 }
 
-func (g *Group) get(ctx context.Context, key string, dest Sink, crosstalkAllowed bool) error {
+func (g *Group) get(ctx context.Context, key string, dest Sink,
+	crosstalkAllowed bool, info *Info) error {
 	g.peersOnce.Do(g.initPeers)
 	g.Stats.Gets.Add(1)
 	if dest == nil {
@@ -292,7 +293,7 @@ func (g *Group) get(ctx context.Context, key string, dest Sink, crosstalkAllowed
 	// track of whether the dest was already populated. One caller
 	// (if local) will set this; the losers will not. The common
 	// case will likely be one caller.
-	value, destPopulated, err := g.load(ctx, key, dest, crosstalkAllowed)
+	value, destPopulated, err := g.load(ctx, key, dest, crosstalkAllowed, info)
 	if err != nil {
 		return err
 	}
@@ -382,7 +383,8 @@ func (g *Group) Remove(ctx context.Context, key string) error {
 var errFurtherCrosstalkRefused = errors.New("further crosstalk refused")
 
 // load loads key either by invoking the getter locally or by sending it to another machine.
-func (g *Group) load(ctx context.Context, key string, dest Sink, crosstalkAllowed bool) (value ByteView, destPopulated bool, err error) {
+func (g *Group) load(ctx context.Context, key string, dest Sink,
+	crosstalkAllowed bool, info *Info) (value ByteView, destPopulated bool, err error) {
 	g.Stats.Loads.Add(1)
 	viewi, err := g.loadGroup.Do(key, func() (interface{}, error) {
 		// Check the cache again because singleflight can only dedup calls
@@ -428,7 +430,7 @@ func (g *Group) load(ctx context.Context, key string, dest Sink, crosstalkAllowe
 			start := time.Now()
 
 			// get value from peers
-			value, err = g.getFromPeer(ctx, peer, key)
+			value, err = g.getFromPeer(ctx, peer, key, info)
 
 			// metrics duration compute
 			duration := int64(time.Since(start)) / int64(time.Millisecond)
@@ -481,7 +483,7 @@ func (g *Group) load(ctx context.Context, key string, dest Sink, crosstalkAllowe
 		//   2. the crosstalk peer request above failed with an unexpected error
 		//      FIXME TODO XXX: we are currently generating the key by ourselves, but should we?
 
-		value, err = g.getLocally(ctx, key, dest)
+		value, err = g.getLocally(ctx, key, dest, info)
 		if err != nil {
 			g.Stats.LocalLoadErrs.Add(1)
 			return nil, err
@@ -497,30 +499,26 @@ func (g *Group) load(ctx context.Context, key string, dest Sink, crosstalkAllowe
 	return
 }
 
-func (g *Group) getLocally(ctx context.Context, key string, dest Sink) (ByteView, error) {
-	err := g.getter.Get(ctx, key, dest)
+func (g *Group) getLocally(ctx context.Context, key string, dest Sink, info *Info) (ByteView, error) {
+	err := g.getter.Get(ctx, key, dest, info)
 	if err != nil {
 		return ByteView{}, err
 	}
 	return dest.view()
 }
 
-func (g *Group) getFromPeer(ctx context.Context, peer ProtoGetter, key string) (ByteView, error) {
+func (g *Group) getFromPeer(ctx context.Context, peer ProtoGetter,
+	key string, info *Info) (ByteView, error) {
 
 	req := &pb.GetRequest{
 		Group: &g.name,
 		Key:   &key,
 	}
 
-	if ctx != nil {
-		if value := ctx.Value(GroupcacheContextKey1); value != nil {
-			s := value.(string)
-			req.Ctx1 = &s
-		}
-		if value := ctx.Value(GroupcacheContextKey2); value != nil {
-			s := value.(string)
-			req.Ctx2 = &s
-		}
+	if info != nil {
+		// Propagate optional user-supplied per-request information to peer load function.
+		req.Ctx1 = &info.Ctx1
+		req.Ctx2 = &info.Ctx2
 	}
 
 	res := &pb.GetResponse{}

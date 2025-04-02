@@ -65,7 +65,7 @@ func testSetup() {
 		Name:            stringGroupName,
 		PurgeExpired:    purgeExpired,
 		CacheBytesLimit: cacheSize,
-		Getter: GetterFunc(func(_ context.Context, key string, dest Sink) error {
+		Getter: GetterFunc(func(_ context.Context, key string, dest Sink, info *Info) error {
 			if key == fromChan {
 				key = <-stringc
 			}
@@ -79,7 +79,7 @@ func testSetup() {
 		Name:            protoGroupName,
 		PurgeExpired:    purgeExpired,
 		CacheBytesLimit: cacheSize,
-		Getter: GetterFunc(func(_ context.Context, key string, dest Sink) error {
+		Getter: GetterFunc(func(_ context.Context, key string, dest Sink, info *Info) error {
 			if key == fromChan {
 				key = <-stringc
 			}
@@ -96,7 +96,7 @@ func testSetup() {
 		Name:            expireGroupName,
 		PurgeExpired:    purgeExpired,
 		CacheBytesLimit: cacheSize,
-		Getter: GetterFunc(func(_ context.Context, key string, dest Sink) error {
+		Getter: GetterFunc(func(_ context.Context, key string, dest Sink, info *Info) error {
 			cacheFills.Add(1)
 			return dest.SetString("ECHO:"+key, time.Now().Add(time.Millisecond*100))
 		}),
@@ -114,7 +114,7 @@ func TestGetDupSuppressString(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		go func() {
 			var s string
-			if err := stringGroup.Get(dummyCtx, fromChan, StringSink(&s)); err != nil {
+			if err := stringGroup.Get(dummyCtx, fromChan, StringSink(&s), nil); err != nil {
 				resc <- "ERROR:" + err.Error()
 				return
 			}
@@ -156,7 +156,7 @@ func TestGetDupSuppressProto(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		go func() {
 			tm := new(testpb.TestMessage)
-			if err := protoGroup.Get(dummyCtx, fromChan, ProtoSink(tm)); err != nil {
+			if err := protoGroup.Get(dummyCtx, fromChan, ProtoSink(tm), nil); err != nil {
 				tm.Name = proto.String("ERROR:" + err.Error())
 			}
 			resc <- tm
@@ -200,7 +200,7 @@ func TestCaching(t *testing.T) {
 	fills := countFills(func() {
 		for i := 0; i < 10; i++ {
 			var s string
-			if err := stringGroup.Get(dummyCtx, "TestCaching-key", StringSink(&s)); err != nil {
+			if err := stringGroup.Get(dummyCtx, "TestCaching-key", StringSink(&s), nil); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -215,7 +215,7 @@ func TestCachingExpire(t *testing.T) {
 	fills := countFills(func() {
 		for i := 0; i < 3; i++ {
 			var s string
-			if err := expireGroup.Get(dummyCtx, "TestCachingExpire-key", StringSink(&s)); err != nil {
+			if err := expireGroup.Get(dummyCtx, "TestCachingExpire-key", StringSink(&s), nil); err != nil {
 				t.Fatal(err)
 			}
 			if i == 1 {
@@ -234,7 +234,7 @@ func TestCacheEviction(t *testing.T) {
 	getTestKey := func() {
 		var res string
 		for i := 0; i < 10; i++ {
-			if err := stringGroup.Get(dummyCtx, testKey, StringSink(&res)); err != nil {
+			if err := stringGroup.Get(dummyCtx, testKey, StringSink(&res), nil); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -253,7 +253,7 @@ func TestCacheEviction(t *testing.T) {
 	for bytesFlooded < cacheSize+1024 {
 		var res string
 		key := fmt.Sprintf("dummy-key-%d", bytesFlooded)
-		stringGroup.Get(dummyCtx, key, StringSink(&res))
+		stringGroup.Get(dummyCtx, key, StringSink(&res), nil)
 		bytesFlooded += int64(len(key) + len(res))
 	}
 	evicts := g.mainCache.nevict - evict0
@@ -325,7 +325,7 @@ func TestPeers(t *testing.T) {
 	peerList := fakePeers([]ProtoGetter{peer0, peer1, peer2, nil})
 	const cacheSize = 0 // disabled
 	localHits := 0
-	getter := func(_ context.Context, key string, dest Sink) error {
+	getter := func(_ context.Context, key string, dest Sink, info *Info) error {
 		localHits++
 		return dest.SetString("got:"+key, time.Time{})
 	}
@@ -347,7 +347,7 @@ func TestPeers(t *testing.T) {
 			key := fmt.Sprintf("key-%d", i)
 			want := "got:" + key
 			var got string
-			err := testGroup.Get(dummyCtx, key, StringSink(&got))
+			err := testGroup.Get(dummyCtx, key, StringSink(&got), nil)
 			if err != nil {
 				t.Errorf("%s: error on key %q: %v", name, key, err)
 				continue
@@ -396,7 +396,7 @@ func TestPeers(t *testing.T) {
 func TestTruncatingByteSliceTarget(t *testing.T) {
 	var buf [100]byte
 	s := buf[:]
-	if err := stringGroup.Get(dummyCtx, "short", TruncatingByteSliceSink(&s)); err != nil {
+	if err := stringGroup.Get(dummyCtx, "short", TruncatingByteSliceSink(&s), nil); err != nil {
 		t.Fatal(err)
 	}
 	if want := "ECHO:short"; string(s) != want {
@@ -404,7 +404,7 @@ func TestTruncatingByteSliceTarget(t *testing.T) {
 	}
 
 	s = buf[:6]
-	if err := stringGroup.Get(dummyCtx, "truncated", TruncatingByteSliceSink(&s)); err != nil {
+	if err := stringGroup.Get(dummyCtx, "truncated", TruncatingByteSliceSink(&s), nil); err != nil {
 		t.Fatal(err)
 	}
 	if want := "ECHO:t"; string(s) != want {
@@ -470,7 +470,7 @@ func TestNoDedup(t *testing.T) {
 	g := newGroup(DefaultWorkspace, "testgroup", purgeExpired, 1024,
 		mainCacheWeight, hotCacheWeight, expiredKeysEvictionInterval,
 		GetterFunc(func(_ context.Context,
-			key string, dest Sink) error {
+			key string, dest Sink, info *Info) error {
 			return dest.SetString(testval, time.Time{})
 		}), nil, nil)
 
@@ -491,7 +491,7 @@ func TestNoDedup(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		go func() {
 			var s string
-			if err := g.Get(dummyCtx, testkey, StringSink(&s)); err != nil {
+			if err := g.Get(dummyCtx, testkey, StringSink(&s), nil); err != nil {
 				resc <- "ERROR:" + err.Error()
 				return
 			}
@@ -551,7 +551,7 @@ func TestContextDeadlineOnPeer(t *testing.T) {
 	peer1 := &slowPeer{}
 	peer2 := &slowPeer{}
 	peerList := fakePeers([]ProtoGetter{peer0, peer1, peer2, nil})
-	getter := func(_ context.Context, key string, dest Sink) error {
+	getter := func(_ context.Context, key string, dest Sink, info *Info) error {
 		return dest.SetString("got:"+key, time.Time{})
 	}
 	const purgeExpired = true
@@ -567,7 +567,7 @@ func TestContextDeadlineOnPeer(t *testing.T) {
 	defer cancel()
 
 	var got string
-	err := testGroup.Get(ctx, "test-key", StringSink(&got))
+	err := testGroup.Get(ctx, "test-key", StringSink(&got), nil)
 	if err != nil {
 		if err != context.DeadlineExceeded {
 			t.Errorf("expected Get to return context deadline exceeded")
