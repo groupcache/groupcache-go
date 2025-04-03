@@ -23,6 +23,8 @@ option go_package = ".";
 message GetRequest {
   required string group = 1;
   required string key = 2; // not actually required/guaranteed to be UTF-8
+  required string ctx1 = 3;
+  required string ctx2 = 4;
 }
 
 message GetResponse {

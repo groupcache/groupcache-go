@@ -30,6 +30,14 @@ For API docs and examples, see http://godoc.org/github.com/modernprogram/groupca
   reducing the metric `Bytes` in order to depict how much cache space was
   being held by expired keys.
 
+* New option `ExpiredKeysEvictionInterval` sets interval for periodic eviction
+  of expired keys. If unset, defaults to 30-minute period. Set to -1 to disable
+  periodic eviction of expired keys.
+
+* New getter argument `info` allows the caller to pass optional user-supplied
+  per-request context information that is propagated to the getter
+  load function.
+
 * Fix for distributed deadklock: https://github.com/mailgun/groupcache/issues/72
    
 ### Modifications from original library

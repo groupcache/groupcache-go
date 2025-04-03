@@ -28,8 +28,17 @@ var group = groupcache.NewGroupWithWorkspace(groupcache.Options{
 	PurgeExpired:    purgeExpired,
 	CacheBytesLimit: 64 << 20,
 	Getter: groupcache.GetterFunc(
-		func(_ context.Context, key string, dest groupcache.Sink) error {
-			fmt.Printf("Get Called - loading key=%s from primary source\n", key)
+		func(ctx context.Context, key string, dest groupcache.Sink, info *groupcache.Info) error {
+
+			var ctx1, ctx2 string
+			if info != nil {
+				// retrieves our optional user-supplied per-request context information.
+				ctx1 = info.Ctx1
+				ctx2 = info.Ctx2
+			}
+
+			fmt.Printf("Get Called - loading key=%s from primary source (ctx1:%s ctx2:%s)\n",
+				key, ctx1, ctx2)
 			v, ok := store[key]
 			if !ok {
 				return fmt.Errorf("key not set")
@@ -52,7 +61,8 @@ func main() {
 	flag.Parse()
 
 	p := strings.Split(*peers, ",")
-	pool := groupcache.NewHTTPPoolOptsWithWorkspace(groupcache.DefaultWorkspace, *serverURL, &groupcache.HTTPPoolOptions{})
+	pool := groupcache.NewHTTPPoolOptsWithWorkspace(groupcache.DefaultWorkspace, *serverURL,
+		&groupcache.HTTPPoolOptions{})
 	pool.Set(p...)
 
 	http.HandleFunc("/set", func(_ http.ResponseWriter, r *http.Request) {
@@ -72,7 +82,27 @@ func main() {
 		defer cancel()
 
 		var b []byte
-		err := group.Get(ctx, key, groupcache.AllocatingByteSliceSink(&b))
+		err := group.Get(ctx, key, groupcache.AllocatingByteSliceSink(&b), nil)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		w.Write(b)
+		w.Write([]byte{'\n'})
+	})
+
+	http.HandleFunc("/cachewithcontext", func(w http.ResponseWriter, r *http.Request) {
+		key := r.FormValue("key")
+
+		fmt.Printf("Fetching value for key '%s'\n", key)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		info := &groupcache.Info{Ctx1: "ctxValue1", Ctx2: "ctxValue2"}
+
+		var b []byte
+		err := group.Get(ctx, key, groupcache.AllocatingByteSliceSink(&b), info)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
@@ -105,6 +135,7 @@ func main() {
 	fmt.Println()
 	fmt.Println("Try: curl -d key=key1 -d value=value1 localhost:8081/set")
 	fmt.Println("Try: curl -d key=key1 localhost:8081/cache")
+	fmt.Println("Try: curl -d key=key1 localhost:8081/cachewithcontext")
 	fmt.Println()
 	termChan := make(chan os.Signal, 1)
 	signal.Notify(termChan, syscall.SIGINT, syscall.SIGTERM)
