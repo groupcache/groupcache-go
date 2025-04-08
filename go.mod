@@ -1,6 +1,8 @@
 module github.com/modernprogram/groupcache/v2
 
-go 1.24.1
+go 1.23.8 // minimum
+
+toolchain go1.24.2 // preferred
 
 require (
 	github.com/segmentio/fasthash v1.0.3
