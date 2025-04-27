@@ -688,21 +688,21 @@ type hotUsageTest struct {
 }
 
 var hotUsageTestTable = []hotUsageTest{
-	{"hot below 1/8 (12.5% of main)", 1000, 124, 8, 1, false},
-	{"hot is 1/8    (12.5%) of main", 1000, 125, 8, 1, false},
-	{"hot over 1/8  (12.5% of main)", 1000, 126, 8, 1, true},
-	{"hot below 1/2 (50% of main)", 1000, 500, 2, 1, false},
-	{"hot is 1/2    (50% of main)", 1000, 500, 2, 1, false},
-	{"hot over 1/2  (50% of main)", 1000, 501, 2, 1, true},
-	{"hot below 1/1 (100% of main)", 1000, 999, 1, 1, false},
-	{"hot is 1/1    (100% of main)", 1000, 1000, 1, 1, false},
-	{"hot over 1/1  (100% of main)", 1000, 1001, 1, 1, true},
-	{"hot below 2/1 (2x main)", 1000, 1999, 1, 2, false},
-	{"hot is 2/1    (2x main)", 1000, 2000, 1, 2, false},
-	{"hot over 2/1  (2x main)", 1000, 2001, 1, 2, true},
-	{"hot below 8/1 (8x main)", 1000, 7999, 1, 8, false},
-	{"hot is 8/1    (8x main)", 1000, 8000, 1, 8, false},
-	{"hot over 8/1  (8x main)", 1000, 8001, 1, 8, true},
+	{"hot below 1/8 of main)", 1000, 124, 8, 1, false},
+	{"hot is    1/8 of main)", 1000, 125, 8, 1, false},
+	{"hot over  1/8 of main)", 1000, 126, 8, 1, true},
+	{"hot below 1/2 of main)", 1000, 500, 2, 1, false},
+	{"hot is    1/2 of main)", 1000, 500, 2, 1, false},
+	{"hot over  1/2 of main)", 1000, 501, 2, 1, true},
+	{"hot below 1/1 of main)", 1000, 999, 1, 1, false},
+	{"hot is    1/1 of main)", 1000, 1000, 1, 1, false},
+	{"hot over  1/1 of main)", 1000, 1001, 1, 1, true},
+	{"hot below 2/1 of main)", 1000, 1999, 1, 2, false},
+	{"hot is    2/1 of main)", 1000, 2000, 1, 2, false},
+	{"hot over  2/1 of main)", 1000, 2001, 1, 2, true},
+	{"hot below 8/1 of main)", 1000, 7999, 1, 8, false},
+	{"hot is    8/1 of main)", 1000, 8000, 1, 8, false},
+	{"hot over  8/1 of main)", 1000, 8001, 1, 8, true},
 }
 
 // go test -count 1 -run TestHotUsage ./...
