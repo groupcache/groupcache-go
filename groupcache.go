@@ -71,9 +71,24 @@ type Options struct {
 	Workspace       *Workspace
 	Name            string
 	CacheBytesLimit int64
+	Getter          Getter
+
+	// HotCacheWeight and MainCacheWeight compose the ratio between the hot cache and the main cache.
+	// When the cache memory limit is reached, this ratio is used to limit each cache to its limit.
+	// One simple way to reason about this ratio is to think of one cache usage against
+	// the other, and NOT one cache against the total sum.
+	//
+	// Consider some examples:
+	// 1) mainWeigth=8 and hotWeight=1 => the hot cache limit is 1/8 of the main cache limit.
+	// 2) mainWeight=2 and hotWeight=1 => the hot cache limit is 1/2 of the main cache limit.
+	// 3) mainWeight=1 and hotWeight=1 => the hot cache limit is equal to the main cache limit.
+	// 4) mainWeight=1 and hotWeight=2 => the hot cache limit is 2x the main cache limit.
+	// 5) mainWeight=1 and hotWeight=8 => the hot cache limit is 8x the main cache limit.
+	//
+	// If unspecified, HotCacheWeight defaults to 1.
+	// If unspecified, MainCacheWeight defaults to 8.
 	HotCacheWeight  int64
 	MainCacheWeight int64
-	Getter          Getter
 
 	// PurgeExpired enables evicting expired keys on memory full condition.
 	PurgeExpired bool
@@ -653,7 +668,7 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 		// respecting the costs of different resources.
 		var victim *cache
 		// default weights: if hotBytes > mainBytes/8 { ... }
-		if hotBytes*g.mainCacheWeight > mainBytes*g.hotCacheWeight {
+		if isHotUsageExcessive(mainBytes, hotBytes, g.mainCacheWeight, g.hotCacheWeight) {
 			victim = &g.hotCache
 		} else {
 			victim = &g.mainCache
@@ -661,6 +676,22 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 
 		victim.removeOldest() // removeOldest is used on mem full condition.
 	}
+}
+
+// isHotUsageExcessive reports if hot cache exceeded its limit in comparisson to main cache.
+// Conversely, it also reports if main cache did NOT exceed its limit in comparisson to hot cache.
+// For the special case when both caches are using their exact limits, we report the hot cache
+// is exceeding its limit, thus favouring the main cache slightly.
+// One simple way to reason about this function behavior is to think of one cache usage against
+// the other, and NOT one cache against the total sum.
+// Consider some examples:
+// 1) mainWeigth=8 and hotWeight=1 => the hot cache limit is 1/8 of the main cache limit.
+// 2) mainWeight=2 and hotWeight=1 => the hot cache limit is 1/2 of the main cache limit.
+// 3) mainWeight=1 and hotWeight=1 => the hot cache limit is equal to the main cache limit.
+// 4) mainWeight=1 and hotWeight=2 => the hot cache limit is 2x the main cache limit.
+// 5) mainWeight=1 and hotWeight=8 => the hot cache limit is 8x the main cache limit.
+func isHotUsageExcessive(mainBytes, hotBytes, mainWeight, hotWeight int64) bool {
+	return hotBytes*mainWeight > mainBytes*hotWeight
 }
 
 // CacheType represents a type of cache.
