@@ -718,3 +718,11 @@ func TestHotUsage(t *testing.T) {
 		}
 	}
 }
+
+func TestGetGroups(t *testing.T) {
+	once.Do(testSetup)
+	groups := GetGroups(DefaultWorkspace)
+	if len(groups) != 3 {
+		t.Errorf("GetGroups: expected=3 got=%d", len(groups))
+	}
+}

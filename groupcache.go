@@ -28,6 +28,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -64,6 +66,15 @@ func GetGroupWithWorkspace(ws *Workspace, name string) *Group {
 	g := ws.groups[name]
 	ws.mu.RUnlock()
 	return g
+}
+
+// GetGroupWiths returns all groups previously created with NewGroup, or
+// nil if there is no group.
+func GetGroups(ws *Workspace) []*Group {
+	ws.mu.RLock()
+	list := slices.Collect(maps.Values(ws.groups))
+	ws.mu.RUnlock()
+	return list
 }
 
 // Options define settings for group.
