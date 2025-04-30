@@ -681,7 +681,7 @@ func (g *Group) populateCache(key string, value ByteView, c *cache) {
 // isHotUsageExcessive reports if hot cache exceeded its limit in comparisson to main cache.
 // Conversely, it also reports if main cache did NOT exceed its limit in comparisson to hot cache.
 // For the special case when both caches are using their exact limits, we report the hot cache
-// is exceeding its limit, thus favouring the main cache slightly.
+// is not exceeding its limit, thus slightly favouring hot cache over main cache.
 // One simple way to reason about this function behavior is to think of one cache usage against
 // the other, and NOT one cache against the total sum.
 // Consider some examples:
