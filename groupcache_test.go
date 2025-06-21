@@ -719,10 +719,35 @@ func TestHotUsage(t *testing.T) {
 	}
 }
 
+// go test -count 1 -run TestGetGroups ./...
 func TestGetGroups(t *testing.T) {
-	once.Do(testSetup)
-	groups := GetGroups(DefaultWorkspace)
-	if len(groups) != 3 {
-		t.Errorf("GetGroups: expected=3 got=%d", len(groups))
+
+	ws := NewWorkspace()
+
+	group1 := NewGroupWithWorkspace(Options{
+		Workspace: ws,
+		Name:      "cache1",
+		Getter: GetterFunc(
+			func(ctx context.Context, key string, dest Sink, info *Info) error {
+				return nil
+			},
+		),
+	})
+
+	group2 := NewGroupWithWorkspace(Options{
+		Workspace: ws,
+		Name:      "cache2",
+		Getter: GetterFunc(
+			func(ctx context.Context, key string, dest Sink, info *Info) error {
+				return nil
+			},
+		),
+	})
+
+	t.Logf("group1=%v group2=%v", group1, group2)
+
+	groups := GetGroups(ws)
+	if len(groups) != 2 {
+		t.Errorf("GetGroups: expected=2 got=%d", len(groups))
 	}
 }
