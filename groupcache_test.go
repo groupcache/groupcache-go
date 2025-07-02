@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
@@ -46,7 +47,7 @@ var (
 	// cacheFills is the number of times stringGroup or
 	// protoGroup's Getter have been called. Read using the
 	// cacheFills function.
-	cacheFills AtomicInt
+	cacheFills atomic.Int64
 )
 
 const (
@@ -190,9 +191,9 @@ func TestGetDupSuppressProto(t *testing.T) {
 }
 
 func countFills(f func()) int64 {
-	fills0 := cacheFills.Get()
+	fills0 := cacheFills.Load()
 	f()
-	return cacheFills.Get() - fills0
+	return cacheFills.Load() - fills0
 }
 
 func TestCaching(t *testing.T) {

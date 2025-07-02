@@ -30,7 +30,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -265,17 +264,17 @@ type flightGroup interface {
 
 // Stats are per-group statistics.
 type Stats struct {
-	Gets                     AtomicInt // any Get request, including from peers
-	CacheHits                AtomicInt // either cache was good
-	GetFromPeersLatencyLower AtomicInt // slowest duration to request value from peers
-	PeerLoads                AtomicInt // either remote load or remote cache hit (not an error)
-	PeerErrors               AtomicInt
-	Loads                    AtomicInt // (gets - cacheHits)
-	LoadsDeduped             AtomicInt // after singleflight
-	LocalLoads               AtomicInt // total good local loads
-	LocalLoadErrs            AtomicInt // total bad local loads
-	ServerRequests           AtomicInt // gets that came over the network from peers
-	CrosstalkRefusals        AtomicInt // refusals for additional crosstalks
+	Gets                     atomic.Int64 // any Get request, including from peers
+	CacheHits                atomic.Int64 // either cache was good
+	GetFromPeersLatencyLower atomic.Int64 // slowest duration to request value from peers
+	PeerLoads                atomic.Int64 // either remote load or remote cache hit (not an error)
+	PeerErrors               atomic.Int64
+	Loads                    atomic.Int64 // (gets - cacheHits)
+	LoadsDeduped             atomic.Int64 // after singleflight
+	LocalLoads               atomic.Int64 // total good local loads
+	LocalLoadErrs            atomic.Int64 // total bad local loads
+	ServerRequests           atomic.Int64 // gets that came over the network from peers
+	CrosstalkRefusals        atomic.Int64 // refusals for additional crosstalks
 }
 
 // Name returns the name of the group.
@@ -464,7 +463,7 @@ func (g *Group) load(ctx context.Context, key string, dest Sink,
 			duration := int64(time.Since(start)) / int64(time.Millisecond)
 
 			// metrics only store the slowest duration
-			if g.Stats.GetFromPeersLatencyLower.Get() < duration {
+			if g.Stats.GetFromPeersLatencyLower.Load() < duration {
 				g.Stats.GetFromPeersLatencyLower.Store(duration)
 			}
 
@@ -841,28 +840,6 @@ func (c *cache) itemsLocked() int64 {
 		return 0
 	}
 	return int64(c.lru.Len())
-}
-
-// An AtomicInt is an int64 to be accessed atomically.
-type AtomicInt int64
-
-// Add atomically adds n to i.
-func (i *AtomicInt) Add(n int64) {
-	atomic.AddInt64((*int64)(i), n)
-}
-
-// Store atomically stores n to i.
-func (i *AtomicInt) Store(n int64) {
-	atomic.StoreInt64((*int64)(i), n)
-}
-
-// Get atomically gets the value of i.
-func (i *AtomicInt) Get() int64 {
-	return atomic.LoadInt64((*int64)(i))
-}
-
-func (i *AtomicInt) String() string {
-	return strconv.FormatInt(i.Get(), 10)
 }
 
 // CacheStats are returned by stats accessors on Group.
