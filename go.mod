@@ -1,11 +1,13 @@
 module github.com/modernprogram/groupcache/v2
 
-go 1.24.4 // weak pointer requires 1.24
+go 1.24.6 // weak pointer requires 1.24 or higher
+
+toolchain go1.25.0
 
 require (
 	github.com/segmentio/fasthash v1.0.3
 	github.com/stretchr/testify v1.10.0
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.36.7
 )
 
 require (
