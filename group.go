@@ -538,5 +538,5 @@ func (g *group) registerInstruments(meter otelmetric.Meter) error {
 		instruments.GetFromPeersLatencyMaxGauge(),
 	)
 
-	return nil
+	return err
 }
