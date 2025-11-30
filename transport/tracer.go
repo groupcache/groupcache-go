@@ -1,5 +1,6 @@
 /*
 Copyright Derrick J Wippler
+Copyright Arsene Tochemey Gandote
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

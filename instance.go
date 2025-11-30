@@ -62,6 +62,9 @@ type Options struct {
 	// CacheFactory returns a new instance of Cache which will be used by groupcache for both
 	// the main and hot cache.
 	CacheFactory func(maxBytes int64) (Cache, error)
+
+	// MetricProvider (Optional) provides OpenTelemetry metrics integration for groupcache.
+	MetricProvider *MeterProvider
 }
 
 // Instance of groupcache
@@ -181,6 +184,15 @@ func (i *Instance) NewGroup(name string, cacheBytes int64, getter Getter) (Group
 		return nil, err
 	}
 	i.groups[name] = g
+
+	// register metrics for this group if a MetricProvider was provided
+	if i.opts.MetricProvider != nil {
+		meter := i.opts.MetricProvider.getMeter()
+		if err := g.registerInstruments(meter); err != nil {
+			return nil, fmt.Errorf("failed to register metrics for group '%s': %w", name, err)
+		}
+	}
+
 	return g, nil
 }
 
