@@ -157,6 +157,7 @@ func testKeys(n int) (keys []string) {
 	return
 }
 
+// nolint
 func TestHttpTransportWithTracerEmitsServerSpan(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()
 	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
@@ -193,6 +194,7 @@ func TestHttpTransportWithTracerEmitsServerSpan(t *testing.T) {
 	assert.True(t, serverSpanFound, "expected a server span recorded by the tracer provider")
 }
 
+// nolint
 func TestHttpClientWithTracerRecordsSpans(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()
 	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))

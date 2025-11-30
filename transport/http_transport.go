@@ -535,6 +535,7 @@ func (h *HttpClient) Set(ctx context.Context, in *pb.SetRequest) error {
 		return recordSpanError(span, err)
 	}
 
+	// nolint:errcheck
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
