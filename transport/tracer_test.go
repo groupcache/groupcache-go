@@ -24,6 +24,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 type recorderTracerProvider struct {
@@ -40,7 +41,7 @@ func (r *recorderTracerProvider) Tracer(name string, opts ...trace.TracerOption)
 }
 
 func newRecorderTracerProvider() *recorderTracerProvider {
-	return &recorderTracerProvider{TracerProvider: trace.NewNoopTracerProvider()}
+	return &recorderTracerProvider{TracerProvider: noop.NewTracerProvider()}
 }
 
 // nolint
