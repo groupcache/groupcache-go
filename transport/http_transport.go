@@ -328,7 +328,9 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// The read the body and set the key value
 	if r.Method == http.MethodPut {
+		// nolint:errcheck
 		defer r.Body.Close()
+
 		b := bufferPool.Get().(*bytes.Buffer)
 		b.Reset()
 		defer bufferPool.Put(b)
@@ -478,6 +480,7 @@ func (h *HttpClient) Get(ctx context.Context, in *pb.GetRequest, out *pb.GetResp
 		return recordSpanError(span, err)
 	}
 
+	// nolint:errcheck
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
@@ -558,6 +561,7 @@ func (h *HttpClient) Remove(ctx context.Context, in *pb.GetRequest) error {
 		return recordSpanError(span, err)
 	}
 
+	// nolint:errcheck
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {

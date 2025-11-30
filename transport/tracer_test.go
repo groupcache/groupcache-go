@@ -43,6 +43,7 @@ func newRecorderTracerProvider() *recorderTracerProvider {
 	return &recorderTracerProvider{TracerProvider: trace.NewNoopTracerProvider()}
 }
 
+// nolint
 func TestNewTracerUsesGlobalProviderWhenNoneProvided(t *testing.T) {
 	t.Parallel()
 
@@ -58,6 +59,7 @@ func TestNewTracerUsesGlobalProviderWhenNoneProvided(t *testing.T) {
 	require.NotNil(t, tracer.getTracer())
 }
 
+// nolint
 func TestNewTracerRespectsCustomProviderOption(t *testing.T) {
 	t.Parallel()
 
@@ -76,6 +78,7 @@ func TestNewTracerRespectsCustomProviderOption(t *testing.T) {
 	require.Empty(t, global.requested)
 }
 
+// nolint
 func TestWithTracerAttributesAppendsAttributes(t *testing.T) {
 	t.Parallel()
 
@@ -88,6 +91,7 @@ func TestWithTracerAttributesAppendsAttributes(t *testing.T) {
 	require.Equal(t, attrs, tracer.traceAttributes)
 }
 
+// nolint
 func TestSpanStartOptionsPoolResetsOnPut(t *testing.T) {
 	t.Parallel()
 
@@ -108,6 +112,7 @@ func TestSpanStartOptionsPoolResetsOnPut(t *testing.T) {
 	tracer.putSpanStartOptions(opts)
 }
 
+// nolint
 func TestAttributesPoolResetsOnPut(t *testing.T) {
 	t.Parallel()
 
