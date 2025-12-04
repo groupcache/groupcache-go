@@ -24,6 +24,9 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	otelmetric "go.opentelemetry.io/otel/metric"
+
 	"github.com/groupcache/groupcache-go/v3/internal/singleflight"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/pb"
@@ -499,4 +502,41 @@ func (g *group) ResetCacheSize(maxBytes int64) error {
 		return fmt.Errorf("Options.CacheFactory(): %w", err)
 	}
 	return nil
+}
+
+func (g *group) registerInstruments(meter otelmetric.Meter) error {
+	instruments, err := newGroupInstruments(meter)
+	if err != nil {
+		return err
+	}
+
+	observeOptions := []otelmetric.ObserveOption{
+		otelmetric.WithAttributes(attribute.String("group.name", g.Name())),
+	}
+
+	_, err = meter.RegisterCallback(func(ctx context.Context, o otelmetric.Observer) error {
+		o.ObserveInt64(instruments.GetsCounter(), g.Stats.Gets.Get(), observeOptions...)
+		o.ObserveInt64(instruments.HitsCounter(), g.Stats.CacheHits.Get(), observeOptions...)
+		o.ObserveInt64(instruments.PeerLoadsCounter(), g.Stats.PeerLoads.Get(), observeOptions...)
+		o.ObserveInt64(instruments.PeerErrorsCounter(), g.Stats.PeerErrors.Get(), observeOptions...)
+		o.ObserveInt64(instruments.LoadsCounter(), g.Stats.Loads.Get(), observeOptions...)
+		o.ObserveInt64(instruments.LoadsDedupedCounter(), g.Stats.LoadsDeduped.Get(), observeOptions...)
+		o.ObserveInt64(instruments.LocalLoadsCounter(), g.Stats.LocalLoads.Get(), observeOptions...)
+		o.ObserveInt64(instruments.LocalLoadErrsCounter(), g.Stats.LocalLoadErrs.Get(), observeOptions...)
+		o.ObserveInt64(instruments.GetFromPeersLatencyMaxGauge(), g.Stats.GetFromPeersLatencyLower.Get(), observeOptions...)
+
+		return nil
+	},
+		instruments.GetsCounter(),
+		instruments.HitsCounter(),
+		instruments.PeerLoadsCounter(),
+		instruments.PeerErrorsCounter(),
+		instruments.LoadsCounter(),
+		instruments.LoadsDedupedCounter(),
+		instruments.LocalLoadsCounter(),
+		instruments.LocalLoadErrsCounter(),
+		instruments.GetFromPeersLatencyMaxGauge(),
+	)
+
+	return err
 }

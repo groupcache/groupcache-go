@@ -4,3 +4,4 @@
 vendor
 .aider*
 .env
+.cache/

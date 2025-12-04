@@ -1,6 +1,7 @@
 /*
 Copyright 2012 Google Inc.
 Copyright 2024 Derrick J Wippler
+Copyright 2025 Arsene Tochemey Gandote
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,10 +33,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v3/transport/pb"
-	"github.com/groupcache/groupcache-go/v3/transport/peer"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/proxy"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/groupcache/groupcache-go/v3/transport/pb"
+	"github.com/groupcache/groupcache-go/v3/transport/peer"
 )
 
 const (
@@ -111,6 +117,12 @@ type HttpTransportOptions struct {
 
 	// TLS support.
 	TLSConfig *tls.Config
+
+	// Tracer (Optional) enables OpenTelemetry tracing for this transport.
+	// If not set, tracing is disabled.
+	// Tracer requires an OpenTelemetry TracerProvider to be configured globally or
+	// provided via TracerOptions.
+	Tracer *Tracer
 }
 
 // HttpTransport defines the HTTP transport
@@ -145,7 +157,18 @@ func NewHttpTransport(opts HttpTransportOptions) *HttpTransport {
 	}
 
 	if opts.Client == nil {
-		opts.Client = http.DefaultClient
+		if opts.Tracer != nil {
+			opts.Client = &http.Client{
+				Transport: otelhttp.NewTransport(http.DefaultTransport),
+			}
+		} else {
+			opts.Client = http.DefaultClient
+		}
+	} else {
+		if opts.Tracer != nil {
+			// override the client transport to enable tracing
+			opts.Client.Transport = otelhttp.NewTransport(opts.Client.Transport)
+		}
 	}
 
 	if opts.Logger == nil {
@@ -181,6 +204,17 @@ func (t *HttpTransport) ListenAndServe(ctx context.Context, address string) erro
 	mux := http.NewServeMux()
 	mux.Handle(t.opts.BasePath, t)
 
+	handler := http.Handler(mux)
+	if t.opts.Tracer != nil {
+		opts := []otelhttp.Option{
+			otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
+		}
+		if t.opts.Tracer.traceProvider != nil {
+			opts = append(opts, otelhttp.WithTracerProvider(t.opts.Tracer.traceProvider))
+		}
+		handler = otelhttp.NewHandler(mux, t.opts.BasePath, opts...)
+	}
+
 	var err error
 
 	t.listener, err = net.Listen("tcp", address)
@@ -193,7 +227,7 @@ func (t *HttpTransport) ListenAndServe(ctx context.Context, address string) erro
 	}
 
 	t.server = &http.Server{
-		Handler: mux,
+		Handler: handler,
 	}
 
 	t.wg.Add(1)
@@ -243,11 +277,33 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		panic("HTTPPool serving unexpected path: " + r.URL.Path)
 	}
 
+	// Always pull the labeler from the request context so we reuse the one injected
+	// by otelhttp middleware (and avoid allocating a new one when tracing is off).
+	labeler, foundLabeler := otelhttp.LabelerFromContext(r.Context())
+	var errorRecorded bool
+	recordError := func() {
+		if errorRecorded || !foundLabeler {
+			return
+		}
+		labeler.Add(attribute.Bool("error", true))
+		errorRecorded = true
+	}
+
+	ctx := r.Context()
+	if t.opts.Context != nil {
+		// preserve the request context (with labeler) by default
+		if custom := t.opts.Context(r); custom != nil {
+			ctx = custom
+		}
+	}
+
 	parts := strings.SplitN(r.URL.Path[len(t.opts.BasePath):], "/", 2)
 	if len(parts) != 2 {
 		http.Error(w, "bad request", http.StatusBadRequest)
+		recordError()
 		return
 	}
+
 	groupName := parts[0]
 	key := parts[1]
 
@@ -261,13 +317,8 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	group := t.instance.GetGroup(groupName).(transportMethods)
 	if group == nil {
 		http.Error(w, "no such group: "+groupName, http.StatusNotFound)
+		recordError()
 		return
-	}
-	var ctx context.Context
-	if t.opts.Context != nil {
-		ctx = t.opts.Context(r)
-	} else {
-		ctx = r.Context()
 	}
 
 	// Delete the key and return 200
@@ -278,13 +329,16 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// The read the body and set the key value
 	if r.Method == http.MethodPut {
+		// nolint:errcheck
 		defer r.Body.Close()
+
 		b := bufferPool.Get().(*bytes.Buffer)
 		b.Reset()
 		defer bufferPool.Put(b)
 		_, err := io.Copy(b, r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			recordError()
 			return
 		}
 
@@ -292,6 +346,7 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = proto.Unmarshal(b.Bytes(), &out)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			recordError()
 			return
 		}
 
@@ -305,6 +360,7 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodGet {
 		http.Error(w, "Only GET, DELETE, PUT are supported", http.StatusMethodNotAllowed)
+		recordError()
 		return
 	}
 
@@ -315,15 +371,18 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, &ErrNotFound{}) {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			recordError()
 			return
 		}
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		recordError()
 		return
 	}
 
 	view, err := value.View()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		recordError()
 		return
 	}
 	var expireNano int64
@@ -335,6 +394,7 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := proto.Marshal(&pb.GetResponse{Value: b, Expire: &expireNano})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		recordError()
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-protobuf")
@@ -347,6 +407,7 @@ func (t *HttpTransport) NewClient(_ context.Context, p peer.Info) (peer.Client, 
 		endpoint: fmt.Sprintf("%s://%s%s", t.opts.Scheme, p.Address, t.opts.BasePath),
 		client:   t.opts.Client,
 		info:     p,
+		tracer:   t.opts.Tracer,
 	}, nil
 }
 
@@ -358,77 +419,165 @@ type HttpClient struct {
 	endpoint string
 	// The http client used to make requests
 	client *http.Client
+	// The tracer used to trace requests
+	tracer *Tracer
+}
+
+func (h *HttpClient) startSpan(ctx context.Context, spanName string) (context.Context, trace.Span, func()) {
+	if h.tracer == nil {
+		return ctx, nil, func() {}
+	}
+
+	spanOptions := h.tracer.getSpanStartOptions()
+	attributes := h.tracer.getAttributes()
+
+	opts := (*spanOptions)[:0]
+	attrs := (*attributes)[:0]
+	if len(h.tracer.traceAttributes) > 0 {
+		attrs = append(attrs, h.tracer.traceAttributes...)
+	}
+
+	if len(attrs) > 0 {
+		opts = append(opts, trace.WithAttributes(attrs...))
+	}
+
+	opts = append(opts, trace.WithSpanKind(trace.SpanKindClient))
+
+	tracer := h.tracer.getTracer()
+	ctx, span := tracer.Start(ctx, spanName, opts...)
+
+	return ctx, span, func() {
+		span.End()
+		h.tracer.putSpanStartOptions(spanOptions)
+		h.tracer.putAttributes(attributes)
+	}
+}
+
+func recordSpanError(span trace.Span, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if span != nil && span.IsRecording() {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+
+	return err
+}
+
+func markSpanOK(span trace.Span) {
+	if span != nil && span.IsRecording() {
+		span.SetStatus(codes.Ok, "OK")
+	}
 }
 
 func (h *HttpClient) Get(ctx context.Context, in *pb.GetRequest, out *pb.GetResponse) error {
+	ctx, span, endSpan := h.startSpan(ctx, "GroupCache.Get")
+	defer endSpan()
+
 	var res http.Response
 	if err := h.makeRequest(ctx, http.MethodGet, in, nil, &res); err != nil {
-		return err
+		return recordSpanError(span, err)
 	}
+
+	// nolint:errcheck
 	defer res.Body.Close()
+
 	if res.StatusCode != http.StatusOK {
 		// Limit reading the error body to max 1 MiB
 		msg, _ := io.ReadAll(io.LimitReader(res.Body, 1024*1024))
 
 		if res.StatusCode == http.StatusNotFound {
-			return &ErrNotFound{Msg: strings.Trim(string(msg), "\n")}
+			err := &ErrNotFound{Msg: strings.Trim(string(msg), "\n")}
+			return recordSpanError(span, err)
 		}
 
 		if res.StatusCode == http.StatusServiceUnavailable {
-			return &ErrRemoteCall{Msg: strings.Trim(string(msg), "\n")}
+			err := &ErrRemoteCall{Msg: strings.Trim(string(msg), "\n")}
+			return recordSpanError(span, err)
 		}
 
-		return fmt.Errorf("server returned: %v, %v", res.Status, string(msg))
+		err := fmt.Errorf("server returned: %v, %v", res.Status, string(msg))
+		return recordSpanError(span, err)
 	}
+
 	b := bufferPool.Get().(*bytes.Buffer)
 	b.Reset()
 	defer bufferPool.Put(b)
 	_, err := io.Copy(b, res.Body)
 	if err != nil {
-		return fmt.Errorf("reading response body: %v", err)
+		werr := fmt.Errorf("reading response body: %w", err)
+		return recordSpanError(span, werr)
 	}
+
 	err = proto.Unmarshal(b.Bytes(), out)
 	if err != nil {
-		return fmt.Errorf("decoding response body: %v", err)
+		werr := fmt.Errorf("decoding response body: %w", err)
+		return recordSpanError(span, werr)
 	}
+
+	markSpanOK(span)
 	return nil
 }
 
 func (h *HttpClient) Set(ctx context.Context, in *pb.SetRequest) error {
+	ctx, span, endSpan := h.startSpan(ctx, "GroupCache.Set")
+	defer endSpan()
+
 	body, err := proto.Marshal(in)
 	if err != nil {
-		return fmt.Errorf("while marshaling SetRequest body: %w", err)
+		werr := fmt.Errorf("while marshaling SetRequest body: %w", err)
+		return recordSpanError(span, werr)
 	}
+
 	var res http.Response
 	if err := h.makeRequest(ctx, http.MethodPut, in, bytes.NewReader(body), &res); err != nil {
-		return err
+		return recordSpanError(span, err)
 	}
+
+	// nolint:errcheck
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(res.Body)
 		if err != nil {
-			return fmt.Errorf("while reading body response: %v", res.Status)
+			fmtErr := fmt.Errorf("while reading body response: %v", res.Status)
+			return recordSpanError(span, fmtErr)
 		}
-		return fmt.Errorf("server returned status %d: %s", res.StatusCode, body)
+
+		err = fmt.Errorf("server returned status %d: %s", res.StatusCode, body)
+		return recordSpanError(span, err)
 	}
+
+	markSpanOK(span)
 	return nil
 }
 
 func (h *HttpClient) Remove(ctx context.Context, in *pb.GetRequest) error {
+	ctx, span, endSpan := h.startSpan(ctx, "GroupCache.Remove")
+	defer endSpan()
+
 	var res http.Response
 	if err := h.makeRequest(ctx, http.MethodDelete, in, nil, &res); err != nil {
-		return err
+		return recordSpanError(span, err)
 	}
+
+	// nolint:errcheck
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(res.Body)
 		if err != nil {
-			return fmt.Errorf("while reading body response: %v", res.Status)
+			fmtErr := fmt.Errorf("while reading body response: %v", res.Status)
+			return recordSpanError(span, fmtErr)
 		}
-		return fmt.Errorf("server returned status %d: %s", res.StatusCode, body)
+
+		err = fmt.Errorf("server returned status %d: %s", res.StatusCode, body)
+		return recordSpanError(span, err)
 	}
+
+	markSpanOK(span)
 	return nil
 }
 

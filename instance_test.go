@@ -29,13 +29,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/groupcache/groupcache-go/v3"
 	"github.com/groupcache/groupcache-go/v3/cluster"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/pb/testpb"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 )
 
 type TestGroup interface {
@@ -494,4 +497,98 @@ func TestSetValueOnAllPeers(t *testing.T) {
 		require.NoError(t, err, "Failed to get value from peer %d", i)
 		assert.Equal(t, "foo", result, "Unexpected value from peer %d", i)
 	}
+}
+
+func TestNewGroupRegistersMetricsWithMeterProvider(t *testing.T) {
+	recMeter := &recordingMeter{}
+	recProvider := &recordingMeterProvider{meter: recMeter}
+	mp := groupcache.NewMeterProvider(groupcache.WithMeterProvider(recProvider))
+
+	instance := groupcache.New(groupcache.Options{
+		MetricProvider: mp,
+	})
+
+	g, err := instance.NewGroup("metrics-group", cacheSize, groupcache.GetterFunc(func(_ context.Context, key string, dest transport.Sink) error {
+		return dest.SetString("ok", time.Time{})
+	}))
+	require.NoError(t, err)
+	require.NotNil(t, g)
+
+	expectedCounters := []string{
+		"groupcache.group.gets",
+		"groupcache.group.cache_hits",
+		"groupcache.group.peer.loads",
+		"groupcache.group.peer.errors",
+		"groupcache.group.loads",
+		"groupcache.group.loads.deduped",
+		"groupcache.group.local.loads",
+		"groupcache.group.local.load_errors",
+	}
+	assert.Equal(t, expectedCounters, recMeter.counterNames)
+	assert.Equal(t, []string{"groupcache.group.peer.latency_max_ms"}, recMeter.updownNames)
+	assert.True(t, recMeter.callbackRegistered, "expected callback registration for metrics")
+	assert.Equal(t, 9, recMeter.instrumentCount)
+}
+
+func TestNewGroupFailsWhenMetricRegistrationFails(t *testing.T) {
+	failMeter := &failingMeter{}
+	recProvider := &recordingMeterProvider{meter: failMeter}
+	mp := groupcache.NewMeterProvider(groupcache.WithMeterProvider(recProvider))
+
+	instance := groupcache.New(groupcache.Options{
+		MetricProvider: mp,
+	})
+
+	g, err := instance.NewGroup("metrics-group-error", cacheSize, groupcache.GetterFunc(func(_ context.Context, key string, dest transport.Sink) error {
+		return dest.SetString("ok", time.Time{})
+	}))
+	require.Error(t, err)
+	assert.Nil(t, g)
+	assert.True(t, failMeter.counterCalled, "expected metrics creation to be attempted")
+}
+
+type recordingMeterProvider struct {
+	noop.MeterProvider
+	meter metric.Meter
+}
+
+func (p *recordingMeterProvider) Meter(string, ...metric.MeterOption) metric.Meter {
+	return p.meter
+}
+
+type recordingMeter struct {
+	noop.Meter
+
+	counterNames       []string
+	updownNames        []string
+	callbackRegistered bool
+	instrumentCount    int
+}
+
+func (m *recordingMeter) Int64ObservableCounter(name string, _ ...metric.Int64ObservableCounterOption) (metric.Int64ObservableCounter, error) {
+	m.counterNames = append(m.counterNames, name)
+	return noop.Int64ObservableCounter{}, nil
+}
+
+func (m *recordingMeter) Int64ObservableUpDownCounter(name string, _ ...metric.Int64ObservableUpDownCounterOption) (metric.Int64ObservableUpDownCounter, error) {
+	m.updownNames = append(m.updownNames, name)
+	return noop.Int64ObservableUpDownCounter{}, nil
+}
+
+func (m *recordingMeter) RegisterCallback(f metric.Callback, instruments ...metric.Observable) (metric.Registration, error) {
+	m.callbackRegistered = true
+	m.instrumentCount = len(instruments)
+	// Invoke the callback once to ensure it tolerates being called with nil ctx/observer
+	_ = f(context.Background(), noop.Observer{})
+	return noop.Registration{}, nil
+}
+
+type failingMeter struct {
+	noop.Meter
+	counterCalled bool
+}
+
+func (m *failingMeter) Int64ObservableCounter(string, ...metric.Int64ObservableCounterOption) (metric.Int64ObservableCounter, error) {
+	m.counterCalled = true
+	return nil, fmt.Errorf("cannot create counter")
 }

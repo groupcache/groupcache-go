@@ -24,14 +24,16 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/segmentio/fasthash/fnv1"
+
 	"github.com/groupcache/groupcache-go/v3"
 	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/groupcache/groupcache-go/v3/transport/peer"
-	"github.com/segmentio/fasthash/fnv1"
 )
 
 // ExampleNew demonstrates starting a groupcache http instance with its own
 // listener.
+// nolint
 func ExampleNew() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 
@@ -84,6 +86,7 @@ func ExampleNew() {
 
 // ExampleNewHttpTransport demonstrates how to use groupcache in a service that
 // is already listening for HTTP requests.
+// nolint
 func ExampleNewHttpTransport() {
 	mux := http.NewServeMux()
 
