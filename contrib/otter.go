@@ -1,12 +1,15 @@
 package contrib
 
 import (
+	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/maypok86/otter"
+
 	"github.com/groupcache/groupcache-go/v3"
 	"github.com/groupcache/groupcache-go/v3/transport"
-	"github.com/maypok86/otter"
 )
 
 type NowFunc func() time.Time
@@ -23,6 +26,8 @@ type OtterCache struct {
 	// Defaults to time.Now()
 	Now NowFunc
 }
+
+var _ groupcache.Cache = (*OtterCache)(nil)
 
 // NewOtterCache instantiates a new cache instance
 func NewOtterCache(maxBytes int64) (*OtterCache, error) {
@@ -103,4 +108,47 @@ func (o *OtterCache) Bytes() int64 {
 
 func (o *OtterCache) Close() {
 	o.cache.Close()
+}
+
+func (o *OtterCache) RemoveKeys(keys ...string) {
+	if len(keys) == 0 {
+		return
+	}
+
+	if len(keys) == 1 {
+		o.cache.Delete(keys[0])
+		return
+	}
+
+	workerCount := runtime.GOMAXPROCS(0)
+	if workerCount > len(keys) {
+		workerCount = len(keys)
+	}
+
+	// For very small batches, a simple loop is faster than spinning up workers.
+	if workerCount <= 1 {
+		for _, key := range keys {
+			o.cache.Delete(key)
+		}
+		return
+	}
+
+	keyCh := make(chan string, workerCount)
+	var wg sync.WaitGroup
+
+	wg.Add(workerCount)
+	for i := 0; i < workerCount; i++ {
+		go func() {
+			defer wg.Done()
+			for k := range keyCh {
+				o.cache.Delete(k)
+			}
+		}()
+	}
+
+	for _, key := range keys {
+		keyCh <- key
+	}
+	close(keyCh)
+	wg.Wait()
 }

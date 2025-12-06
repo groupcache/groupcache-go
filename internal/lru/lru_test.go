@@ -18,6 +18,7 @@ package lru
 
 import (
 	"fmt"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -97,6 +98,97 @@ func TestRemove(t *testing.T) {
 	lru.Remove("myKey")
 	if _, ok := lru.Get("myKey"); ok {
 		t.Fatal("TestRemove returned a removed entry")
+	}
+}
+
+func TestRemoveKeys(t *testing.T) {
+	evicted := make([]Key, 0)
+	lru := New(0)
+	lru.OnEvicted = func(key Key, value interface{}) {
+		evicted = append(evicted, key)
+	}
+
+	lru.Add("first", 1, time.Time{})
+	lru.Add("second", 2, time.Time{})
+	lru.Add("third", 3, time.Time{})
+
+	lru.RemoveKeys(false, "first", "third", "missing")
+
+	if _, ok := lru.Get("first"); ok {
+		t.Fatal("expected first to be removed")
+	}
+	if _, ok := lru.Get("third"); ok {
+		t.Fatal("expected third to be removed")
+	}
+	if val, ok := lru.Get("second"); !ok || val != 2 {
+		t.Fatalf("expected second to remain with value 2; got ok=%v val=%v", ok, val)
+	}
+	if len(evicted) != 2 || evicted[0] != "first" || evicted[1] != "third" {
+		t.Fatalf("unexpected eviction order: %v", evicted)
+	}
+}
+
+func TestRemoveKeysParallel(t *testing.T) {
+	evicted := make(map[Key]int)
+	lru := New(0)
+	lru.OnEvicted = func(key Key, value interface{}) {
+		evicted[key]++
+	}
+
+	lru.Add("a", 1, time.Time{})
+	lru.Add("b", 2, time.Time{})
+	lru.Add("c", 3, time.Time{})
+	lru.Add("d", 4, time.Time{})
+
+	lru.RemoveKeys(true, "a", "c", "missing", "d")
+
+	if _, ok := lru.Get("a"); ok {
+		t.Fatal("expected a to be removed")
+	}
+	if _, ok := lru.Get("c"); ok {
+		t.Fatal("expected c to be removed")
+	}
+	if _, ok := lru.Get("d"); ok {
+		t.Fatal("expected d to be removed")
+	}
+	if val, ok := lru.Get("b"); !ok || val != 2 {
+		t.Fatalf("expected b to remain with value 2; got ok=%v val=%v", ok, val)
+	}
+	if len(evicted) != 3 {
+		t.Fatalf("expected 3 evicted keys, got %d: %v", len(evicted), evicted)
+	}
+	for _, key := range []Key{"a", "c", "d"} {
+		if evicted[key] != 1 {
+			t.Fatalf("expected %v to be evicted once, got %d", key, evicted[key])
+		}
+	}
+}
+
+func TestRemoveKeysParallelSingleWorker(t *testing.T) {
+	// Force a single worker so RemoveKeys takes the serial fallback when parallel is requested.
+	prev := runtime.GOMAXPROCS(0)
+	runtime.GOMAXPROCS(1)
+	defer runtime.GOMAXPROCS(prev)
+
+	evicted := make(map[Key]int)
+	lru := New(0)
+	lru.OnEvicted = func(key Key, value interface{}) {
+		evicted[key]++
+	}
+
+	lru.Add("x", 1, time.Time{})
+	lru.Add("y", 2, time.Time{})
+
+	lru.RemoveKeys(true, "x", "y")
+
+	if _, ok := lru.Get("x"); ok {
+		t.Fatal("expected x to be removed")
+	}
+	if _, ok := lru.Get("y"); ok {
+		t.Fatal("expected y to be removed")
+	}
+	if len(evicted) != 2 {
+		t.Fatalf("expected 2 evictions, got %d: %v", len(evicted), evicted)
 	}
 }
 

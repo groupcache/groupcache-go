@@ -2,13 +2,16 @@ package contrib_test
 
 import (
 	"crypto/rand"
+	"fmt"
+	"runtime"
 	"testing"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v3/contrib"
-	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/groupcache/groupcache-go/v3/contrib"
+	"github.com/groupcache/groupcache-go/v3/transport"
 )
 
 func TestOtterCrud(t *testing.T) {
@@ -88,6 +91,67 @@ func TestOtterEnsureUpdateExpiredValue(t *testing.T) {
 	// Should not exist
 	_, ok = c.Get("key2")
 	assert.False(t, ok)
+}
+
+func TestOtterRemoveKeysSingle(t *testing.T) {
+	c, err := contrib.NewOtterCache(20_000)
+	require.NoError(t, err)
+
+	v1 := transport.ByteViewWithExpire([]byte("v1"), time.Time{})
+	v2 := transport.ByteViewWithExpire([]byte("v2"), time.Time{})
+
+	c.Add("k1", v1)
+	c.Add("k2", v2)
+
+	c.RemoveKeys("k1")
+
+	_, ok := c.Get("k1")
+	assert.False(t, ok)
+
+	got, ok := c.Get("k2")
+	assert.True(t, ok)
+	assert.True(t, got.Equal(v2))
+	assert.Equal(t, int64(1), c.Stats().Items)
+}
+
+func TestOtterRemoveKeysBatch(t *testing.T) {
+	c, err := contrib.NewOtterCache(20_000)
+	require.NoError(t, err)
+
+	keys := make([]string, 0, 100)
+	for i := range 100 {
+		key := fmt.Sprintf("key-%d", i)
+		keys = append(keys, key)
+		c.Add(key, transport.ByteViewWithExpire([]byte("v"), time.Time{}))
+	}
+
+	c.RemoveKeys(keys...)
+
+	for _, key := range keys {
+		_, ok := c.Get(key)
+		assert.False(t, ok)
+	}
+	assert.Equal(t, int64(0), c.Stats().Items)
+}
+
+func TestOtterRemoveKeysSingleWorker(t *testing.T) {
+	prev := runtime.GOMAXPROCS(0)
+	runtime.GOMAXPROCS(1)
+	defer runtime.GOMAXPROCS(prev)
+
+	c, err := contrib.NewOtterCache(20_000)
+	require.NoError(t, err)
+
+	c.Add("a", transport.ByteViewWithExpire([]byte("v1"), time.Time{}))
+	c.Add("b", transport.ByteViewWithExpire([]byte("v2"), time.Time{}))
+
+	c.RemoveKeys("a", "b")
+
+	for _, key := range []string{"a", "b"} {
+		_, ok := c.Get(key)
+		assert.False(t, ok)
+	}
+	assert.Equal(t, int64(0), c.Stats().Items)
 }
 
 func randomValue(length int) []byte {

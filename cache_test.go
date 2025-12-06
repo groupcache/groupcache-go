@@ -21,8 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/groupcache/groupcache-go/v3/transport"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/groupcache/groupcache-go/v3/transport"
 )
 
 func TestEnsureSizeReportedCorrectly(t *testing.T) {
@@ -129,4 +130,57 @@ func TestEnsureUpdateExpiredValue(t *testing.T) {
 	// Should not exist
 	_, ok = c.Get("key2")
 	assert.False(t, ok)
+}
+
+func TestMutexCacheRemoveKeys(t *testing.T) {
+	c := newMutexCache(0)
+
+	v1 := transport.ByteViewWithExpire([]byte("first"), time.Time{})
+	v2 := transport.ByteViewWithExpire([]byte("second"), time.Time{})
+	v3 := transport.ByteViewWithExpire([]byte("third"), time.Time{})
+
+	c.Add("k1", v1)
+	c.Add("k2", v2)
+	c.Add("k3", v3)
+
+	c.RemoveKeys("k1", "k3", "missing")
+
+	_, ok := c.Get("k1")
+	assert.False(t, ok)
+
+	_, ok = c.Get("k3")
+	assert.False(t, ok)
+
+	got, ok := c.Get("k2")
+	assert.True(t, ok)
+	assert.True(t, got.Equal(v2))
+
+	stats := c.Stats()
+	assert.Equal(t, int64(len("k2")+len("second")), stats.Bytes)
+	assert.Equal(t, int64(1), stats.Items)
+	assert.Equal(t, int64(2), stats.Evictions)
+}
+
+func TestMutexCacheRemoveKeysSingle(t *testing.T) {
+	c := newMutexCache(0)
+
+	v1 := transport.ByteViewWithExpire([]byte("v1"), time.Time{})
+	v2 := transport.ByteViewWithExpire([]byte("value"), time.Time{})
+
+	c.Add("k1", v1)
+	c.Add("k2", v2)
+
+	c.RemoveKeys("k1")
+
+	stats := c.Stats()
+	assert.Equal(t, int64(len("k2")+len("value")), stats.Bytes)
+	assert.Equal(t, int64(1), stats.Items)
+	assert.Equal(t, int64(1), stats.Evictions)
+
+	_, ok := c.Get("k1")
+	assert.False(t, ok)
+
+	got, ok := c.Get("k2")
+	assert.True(t, ok)
+	assert.True(t, got.Equal(v2))
 }

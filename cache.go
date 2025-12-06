@@ -40,6 +40,8 @@ type Cache interface {
 	// Close closes the cache. The implementation should shut down any
 	// background operations.
 	Close()
+	// RemoveKeys removes multiple keys from the cache
+	RemoveKeys(keys ...string)
 }
 
 // nowFunc returns the current time which is used by the LRU to
@@ -58,6 +60,8 @@ type mutexCache struct {
 	hits, gets, evictions int64
 	maxBytes              int64
 }
+
+var _ Cache = (*mutexCache)(nil)
 
 // newMutexCache creates a new cache. If maxBytes == 0 then size of the cache is unbounded.
 func newMutexCache(maxBytes int64) *mutexCache {
@@ -128,6 +132,29 @@ func (m *mutexCache) Bytes() int64 {
 
 func (m *mutexCache) Close() {
 	// Do nothing
+}
+
+func (m *mutexCache) RemoveKeys(keys ...string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.lru == nil {
+		return
+	}
+	if len(keys) == 0 {
+		return
+	}
+
+	if len(keys) == 1 {
+		m.lru.Remove(keys[0])
+		return
+	}
+
+	lruKeys := make([]lru.Key, len(keys))
+	for i, key := range keys {
+		lruKeys[i] = key
+	}
+
+	m.lru.RemoveKeys(true, lruKeys...)
 }
 
 // removeOldest removes the oldest items in the cache until the number of bytes is

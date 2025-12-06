@@ -47,7 +47,7 @@ func newRecorderTracerProvider() *recorderTracerProvider {
 
 // nolint
 func TestNewTracerUsesGlobalProviderWhenNoneProvided(t *testing.T) {
-	t.Parallel()
+	// Mutates the global OTel tracer provider, so keep this test serial to avoid cross-test interference.
 
 	original := otel.GetTracerProvider()
 	rec := newRecorderTracerProvider()
@@ -63,7 +63,7 @@ func TestNewTracerUsesGlobalProviderWhenNoneProvided(t *testing.T) {
 
 // nolint
 func TestNewTracerRespectsCustomProviderOption(t *testing.T) {
-	t.Parallel()
+	// Mutates the global OTel tracer provider, so keep this test serial to avoid cross-test interference.
 
 	original := otel.GetTracerProvider()
 	defer otel.SetTracerProvider(original)
@@ -82,8 +82,6 @@ func TestNewTracerRespectsCustomProviderOption(t *testing.T) {
 
 // nolint
 func TestWithTracerAttributesAppendsAttributes(t *testing.T) {
-	t.Parallel()
-
 	attrs := []attribute.KeyValue{
 		attribute.String("env", "test"),
 		attribute.Int("shard", 1),
@@ -95,8 +93,6 @@ func TestWithTracerAttributesAppendsAttributes(t *testing.T) {
 
 // nolint
 func TestSpanStartOptionsPoolResetsOnPut(t *testing.T) {
-	t.Parallel()
-
 	tracer := NewTracer()
 
 	opts := tracer.getSpanStartOptions()
@@ -116,8 +112,6 @@ func TestSpanStartOptionsPoolResetsOnPut(t *testing.T) {
 
 // nolint
 func TestAttributesPoolResetsOnPut(t *testing.T) {
-	t.Parallel()
-
 	tracer := NewTracer()
 
 	attrs := tracer.getAttributes()

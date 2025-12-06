@@ -19,6 +19,8 @@ package lru
 
 import (
 	"container/list"
+	"runtime"
+	"sync"
 	"time"
 )
 
@@ -114,6 +116,66 @@ func (c *Cache) Remove(key Key) {
 	if ele, hit := c.cache[key]; hit {
 		c.removeElement(ele)
 	}
+}
+
+// RemoveKeys removes multiple keys from the cache in one pass.
+// If parallel is true, removals are dispatched to goroutines with a local lock
+// to keep internal state consistent.
+func (c *Cache) RemoveKeys(parallel bool, keys ...Key) {
+	if c.cache == nil {
+		return
+	}
+	if len(keys) == 0 {
+		return
+	}
+
+	if !parallel || len(keys) < 2 {
+		for _, key := range keys {
+			if ele, hit := c.cache[key]; hit {
+				c.removeElement(ele)
+			}
+		}
+		return
+	}
+
+	workerCount := runtime.GOMAXPROCS(0)
+	if workerCount > len(keys) {
+		workerCount = len(keys)
+	}
+
+	// If parallelism would only spin up a single worker, skip the goroutine/channel overhead.
+	if workerCount <= 1 {
+		for _, key := range keys {
+			if ele, hit := c.cache[key]; hit {
+				c.removeElement(ele)
+			}
+		}
+		return
+	}
+
+	keyCh := make(chan Key, workerCount)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	wg.Add(workerCount)
+	for i := 0; i < workerCount; i++ {
+		go func() {
+			defer wg.Done()
+			for k := range keyCh {
+				mu.Lock()
+				if ele, hit := c.cache[k]; hit {
+					c.removeElement(ele)
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+
+	for _, key := range keys {
+		keyCh <- key
+	}
+	close(keyCh)
+	wg.Wait()
 }
 
 // RemoveOldest removes the oldest item from the cache.
