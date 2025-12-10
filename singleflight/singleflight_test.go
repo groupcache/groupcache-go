@@ -64,7 +64,7 @@ func TestDoDupSuppress(t *testing.T) {
 
 	const n = 10
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(1)
 		go func() {
 			v, err := g.Do("key", fn)
@@ -124,7 +124,7 @@ func TestDoConcurrentPanic(t *testing.T) {
 
 	const n = 10
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(1)
 		go func() {
 			defer func() {

@@ -54,7 +54,6 @@ const (
 	stringGroupName = "string-group"
 	protoGroupName  = "proto-group"
 	expireGroupName = "expire-group"
-	testMessageType = "google3/net/groupcache/go/test_proto.TestMessage"
 	fromChan        = "from-chan"
 	cacheSize       = 1 << 20
 )
@@ -112,7 +111,7 @@ func TestGetDupSuppressString(t *testing.T) {
 	// from stringc) and the second should latch on to the first
 	// one.
 	resc := make(chan string, 2)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		go func() {
 			var s string
 			if err := stringGroup.Get(dummyCtx, fromChan, StringSink(&s), nil); err != nil {
@@ -134,7 +133,7 @@ func TestGetDupSuppressString(t *testing.T) {
 	// as well.
 	stringc <- "foo"
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		select {
 		case v := <-resc:
 			if v != "ECHO:foo" {
@@ -154,7 +153,7 @@ func TestGetDupSuppressProto(t *testing.T) {
 	// from stringc) and the second should latch on to the first
 	// one.
 	resc := make(chan *testpb.TestMessage, 2)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		go func() {
 			tm := new(testpb.TestMessage)
 			if err := protoGroup.Get(dummyCtx, fromChan, ProtoSink(tm), nil); err != nil {
@@ -178,7 +177,7 @@ func TestGetDupSuppressProto(t *testing.T) {
 		Name: proto.String("ECHO:Fluffy"),
 		City: proto.String("SOME-CITY"),
 	}
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		select {
 		case v := <-resc:
 			if v.GetName() != want.GetName() || v.GetCity() != want.GetCity() {
@@ -199,7 +198,7 @@ func countFills(f func()) int64 {
 func TestCaching(t *testing.T) {
 	once.Do(testSetup)
 	fills := countFills(func() {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			var s string
 			if err := stringGroup.Get(dummyCtx, "TestCaching-key", StringSink(&s), nil); err != nil {
 				t.Fatal(err)
@@ -214,7 +213,7 @@ func TestCaching(t *testing.T) {
 func TestCachingExpire(t *testing.T) {
 	once.Do(testSetup)
 	fills := countFills(func() {
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			var s string
 			if err := expireGroup.Get(dummyCtx, "TestCachingExpire-key", StringSink(&s), nil); err != nil {
 				t.Fatal(err)
@@ -234,7 +233,7 @@ func TestCacheEviction(t *testing.T) {
 	testKey := "TestCacheEviction-key"
 	getTestKey := func() {
 		var res string
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			if err := stringGroup.Get(dummyCtx, testKey, StringSink(&res), nil); err != nil {
 				t.Fatal(err)
 			}
@@ -344,7 +343,7 @@ func TestPeers(t *testing.T) {
 			p.hits = 0
 		}
 
-		for i := 0; i < n; i++ {
+		for i := range n {
 			key := fmt.Sprintf("key-%d", i)
 			want := "got:" + key
 			var got string
@@ -489,7 +488,7 @@ func TestNoDedup(t *testing.T) {
 	// allow one at a time to enter singleflight.Do, so the callback
 	// function will be called twice.
 	resc := make(chan string, 2)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		go func() {
 			var s string
 			if err := g.Get(dummyCtx, testkey, StringSink(&s), nil); err != nil {
@@ -508,7 +507,7 @@ func TestNoDedup(t *testing.T) {
 	orderedGroup.stage2 <- true
 	orderedGroup.stage2 <- true
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if s := <-resc; s != testval {
 			t.Errorf("result is %s want %s", s, testval)
 		}

@@ -58,7 +58,7 @@ func (m *Map) IsEmpty() bool {
 // Add adds some keys to the hash.
 func (m *Map) Add(keys ...string) {
 	for _, key := range keys {
-		for i := 0; i < m.replicas; i++ {
+		for i := range m.replicas {
 			hash := int(m.hash([]byte(fmt.Sprintf("%x", md5.Sum([]byte(strconv.Itoa(i)+key))))))
 			m.keys = append(m.keys, entry{sum: hash, key: key})
 		}

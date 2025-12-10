@@ -65,13 +65,13 @@ func TestHTTPPool(t *testing.T) {
 	defer ts.Close()
 
 	var childAddr []string
-	for i := 0; i < nChild; i++ {
+	for range nChild {
 		childAddr = append(childAddr, pickFreeAddr(t))
 	}
 
 	var cmds []*exec.Cmd
 	var wg sync.WaitGroup
-	for i := 0; i < nChild; i++ {
+	for i := range nChild {
 		cmd := exec.Command(os.Args[0],
 			"--test.run=TestHTTPPool",
 			"--test_peer_child",
@@ -88,7 +88,7 @@ func TestHTTPPool(t *testing.T) {
 		go awaitAddrReady(t, childAddr[i], &wg)
 	}
 	defer func() {
-		for i := 0; i < nChild; i++ {
+		for i := range nChild {
 			if cmds[i].Process != nil {
 				cmds[i].Process.Kill()
 			}
@@ -139,7 +139,7 @@ func TestHTTPPool(t *testing.T) {
 	var key = "removeTestKey"
 
 	// Multiple gets on the same key
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err := g.Get(ctx, key, StringSink(&value), nil); err != nil {
 			t.Fatal(err)
 		}

@@ -117,7 +117,7 @@ func TestEvict(t *testing.T) {
 
 	lru := New(20)
 	lru.OnEvicted = onEvictedFun
-	for i := 0; i < 22; i++ {
+	for i := range 22 {
 		lru.Add(fmt.Sprintf("myKey%d", i), 1234, time.Time{})
 	}
 
