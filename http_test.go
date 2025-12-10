@@ -34,6 +34,7 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/modernprogram/groupcache/v2/groupcachepb"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -44,6 +45,7 @@ var (
 	serverAddr = flag.String("test_server_addr", "", "Address of the server Child Getters will hit ; used by TestHTTPPool")
 )
 
+// go test -count 1 -run '^TestHTTPPool$' .
 func TestHTTPPool(t *testing.T) {
 	if *peerChild {
 		beChildForTestHTTPPool(t)
@@ -298,5 +300,104 @@ func awaitAddrReady(_ /*t*/ *testing.T, addr string, wg *sync.WaitGroup) {
 			delay = maxDelay
 		}
 		time.Sleep(delay)
+	}
+}
+
+// go test -count 1 -run '^TestGetWithUserinfo$' .
+func TestGetWithUserinfo(t *testing.T) {
+	ws := NewWorkspace()
+
+	addr := "127.0.0.1:8080"
+
+	self := "http://" + addr
+
+	pool := NewHTTPPoolOptsWithWorkspace(ws, self, nil)
+	pool.Set(self)
+
+	//mux := http.NewServeMux()
+	//mux.Handle(pool.opts.BasePath, pool)
+
+	server := http.Server{
+		Addr:    addr,
+		Handler: pool,
+	}
+	defer server.Close()
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			t.Logf("HTTP server: %v", err)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	const (
+		expectedCtx1 = "ctx1"
+		expectedCtx2 = "ctx2"
+	)
+
+	//
+	// create group
+	//
+
+	groupName := "group1"
+
+	var foundCtx1, foundCtx2 string
+
+	group := NewGroupWithWorkspace(Options{
+		Workspace:       ws,
+		Name:            groupName,
+		CacheBytesLimit: 1_000_000,
+		Getter: GetterFunc(
+			func(ctx context.Context, key string, dest Sink, info *Info) error {
+
+				if info == nil {
+					t.Errorf("group getter missing userinfo")
+				} else {
+					// retrieves our optional user-supplied per-request context information.
+					foundCtx1 = info.Ctx1
+					foundCtx2 = info.Ctx2
+				}
+
+				return dest.SetBytes([]byte(""), time.Time{})
+			},
+		),
+	})
+
+	t.Logf("group: %s", group.name)
+
+	//
+	// create getter
+	//
+
+	getter := httpGetter{
+		getTransport: pool.opts.Transport,
+		baseURL:      self + pool.opts.BasePath,
+		ws:           ws,
+	}
+
+	key := "key1"
+	ctx1 := expectedCtx1
+	ctx2 := expectedCtx2
+
+	req := &pb.GetRequest{
+		Group: &groupName,
+		Key:   &key,
+		Ctx1:  &ctx1,
+		Ctx2:  &ctx2,
+	}
+
+	res := &pb.GetResponse{}
+
+	errGet := getter.Get(context.TODO(), req, res)
+	if errGet != nil {
+		t.Errorf("getter.Get: error: %v", errGet)
+	}
+
+	if foundCtx1 != expectedCtx1 {
+		t.Errorf("foundCtx1=%q expectedCtx1=%q", foundCtx1, expectedCtx1)
+	}
+	if foundCtx2 != expectedCtx2 {
+		t.Errorf("foundCtx2=%q expectedCtx2=%q", foundCtx2, expectedCtx2)
 	}
 }

@@ -222,10 +222,31 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// GET
+
+	reqBody, errReqBody := io.ReadAll(r.Body)
+	if errReqBody != nil {
+		http.Error(w, errReqBody.Error(), http.StatusInternalServerError)
+		return
+	}
+	var userinfo *Info
+
+	if len(reqBody) > 0 {
+		var getReq pb.GetRequest
+		if errProto := proto.Unmarshal(reqBody, &getReq); errProto != nil {
+			http.Error(w, errProto.Error(), http.StatusBadRequest)
+			return
+		}
+		userinfo = &Info{
+			Ctx1: getReq.GetCtx1(),
+			Ctx2: getReq.GetCtx2(),
+		}
+	}
+
 	var b []byte
 
 	value := AllocatingByteSliceSink(&b)
-	err := group.GetForPeer(ctx, key, value, nil)
+	err := group.GetForPeer(ctx, key, value, userinfo)
 	if err != nil {
 		if errors.Is(err, &ErrNotFound{}) {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -270,7 +291,8 @@ type request interface {
 	GetKey() string
 }
 
-func (h *httpGetter) makeRequest(ctx context.Context, m string, in request, b io.Reader, out *http.Response) error {
+func (h *httpGetter) makeRequest(ctx context.Context, m string, in request,
+	b io.Reader, out *http.Response) error {
 	u := fmt.Sprintf(
 		"%v%v/%v",
 		h.baseURL,
@@ -295,9 +317,21 @@ func (h *httpGetter) makeRequest(ctx context.Context, m string, in request, b io
 	return nil
 }
 
-func (h *httpGetter) Get(ctx context.Context, in *pb.GetRequest, out *pb.GetResponse) error {
+func (h *httpGetter) Get(ctx context.Context, in *pb.GetRequest,
+	out *pb.GetResponse) error {
+
+	var rd io.Reader
+
+	if in.GetCtx1() != "" || in.GetCtx2() != "" {
+		body, errMarshal := proto.Marshal(in)
+		if errMarshal != nil {
+			return fmt.Errorf("while marshaling GetRequest body: %w", errMarshal)
+		}
+		rd = bytes.NewReader(body)
+	}
+
 	var res http.Response
-	if err := h.makeRequest(ctx, http.MethodGet, in, nil, &res); err != nil {
+	if err := h.makeRequest(ctx, http.MethodGet, in, rd, &res); err != nil {
 		return err
 	}
 	defer res.Body.Close()
