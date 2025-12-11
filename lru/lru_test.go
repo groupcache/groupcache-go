@@ -34,8 +34,8 @@ type complexStruct struct {
 
 var getTests = []struct {
 	name       string
-	keyToAdd   interface{}
-	keyToGet   interface{}
+	keyToAdd   any
+	keyToGet   any
 	expectedOk bool
 }{
 	{"string_hit", "myKey", "myKey", true},
@@ -48,10 +48,10 @@ var getTests = []struct {
 
 func TestAdd_evictsOldAndReplaces(t *testing.T) {
 	var evictedKey Key
-	var evictedValue interface{}
+	var evictedValue any
 	var evictedExpired bool
 	lru := New(0)
-	lru.OnEvicted = func(key Key, value interface{}, expired bool) {
+	lru.OnEvicted = func(key Key, value any, expired bool) {
 		evictedKey = key
 		evictedValue = value
 		evictedExpired = expired
@@ -108,7 +108,7 @@ func TestRemove(t *testing.T) {
 func TestEvict(t *testing.T) {
 	evictedKeys := make([]Key, 0)
 	var countNonExpiredAndMemFull int
-	onEvictedFun := func(key Key, value interface{}, nonExpiredAndMemFull bool) {
+	onEvictedFun := func(key Key, value any, nonExpiredAndMemFull bool) {
 		evictedKeys = append(evictedKeys, key)
 		if nonExpiredAndMemFull {
 			countNonExpiredAndMemFull++
@@ -117,7 +117,7 @@ func TestEvict(t *testing.T) {
 
 	lru := New(20)
 	lru.OnEvicted = onEvictedFun
-	for i := 0; i < 22; i++ {
+	for i := range 22 {
 		lru.Add(fmt.Sprintf("myKey%d", i), 1234, time.Time{})
 	}
 
@@ -139,7 +139,7 @@ func TestEvict(t *testing.T) {
 func TestExpire(t *testing.T) {
 	var tests = []struct {
 		name       string
-		key        interface{}
+		key        any
 		expectedOk bool
 		expire     time.Duration
 		wait       time.Duration
@@ -152,7 +152,7 @@ func TestExpire(t *testing.T) {
 
 	for _, tt := range tests {
 		lru := New(0)
-		lru.OnEvicted = func(key Key, value interface{}, nonExpiredAndMemFull bool) {
+		lru.OnEvicted = func(key Key, value any, nonExpiredAndMemFull bool) {
 			if nonExpiredAndMemFull {
 				countNonExpiredAndMemFull++
 			}
@@ -178,7 +178,7 @@ func TestEvictNonExpired(t *testing.T) {
 	lru := New(maxKeys)
 	var countNonExpiredAndMemFull int
 	var evictions int
-	lru.OnEvicted = func(key Key, value interface{}, nonExpiredAndMemFull bool) {
+	lru.OnEvicted = func(key Key, value any, nonExpiredAndMemFull bool) {
 		evictions++
 		if nonExpiredAndMemFull {
 			countNonExpiredAndMemFull++
@@ -264,7 +264,7 @@ func TestPurge(t *testing.T) {
 	lru := New(0)
 	var countNonExpiredAndMemFull int
 	var evictions int
-	lru.OnEvicted = func(key Key, value interface{}, nonExpiredAndMemFull bool) {
+	lru.OnEvicted = func(key Key, value any, nonExpiredAndMemFull bool) {
 		evictions++
 		if nonExpiredAndMemFull {
 			countNonExpiredAndMemFull++

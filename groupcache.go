@@ -258,7 +258,7 @@ type Group struct {
 // satisfies.  We define this so that we may test with an alternate
 // implementation.
 type flightGroup interface {
-	Do(key string, fn func() (interface{}, error)) (interface{}, error)
+	Do(key string, fn func() (any, error)) (any, error)
 	Lock(fn func())
 }
 
@@ -337,7 +337,7 @@ func (g *Group) Set(ctx context.Context, key string, value []byte, expire time.T
 		return errors.New("empty Set() key not allowed")
 	}
 
-	_, err := g.setGroup.Do(key, func() (interface{}, error) {
+	_, err := g.setGroup.Do(key, func() (any, error) {
 		// If remote peer owns this key
 		owner, ok := g.peers.PickPeer(key)
 		if ok {
@@ -363,7 +363,7 @@ func (g *Group) Set(ctx context.Context, key string, value []byte, expire time.T
 func (g *Group) Remove(ctx context.Context, key string) error {
 	g.peersOnce.Do(g.initPeers)
 
-	_, err := g.removeGroup.Do(key, func() (interface{}, error) {
+	_, err := g.removeGroup.Do(key, func() (any, error) {
 
 		// Remove from key owner first
 		owner, ok := g.peers.PickPeer(key)
@@ -413,7 +413,7 @@ var errFurtherCrosstalkRefused = errors.New("further crosstalk refused")
 func (g *Group) load(ctx context.Context, key string, dest Sink,
 	crosstalkAllowed bool, info *Info) (value ByteView, destPopulated bool, err error) {
 	g.Stats.Loads.Add(1)
-	viewi, err := g.loadGroup.Do(key, func() (interface{}, error) {
+	viewi, err := g.loadGroup.Do(key, func() (any, error) {
 		// Check the cache again because singleflight can only dedup calls
 		// that overlap concurrently.  It's possible for 2 concurrent
 		// requests to miss the cache, resulting in 2 load() calls.  An
@@ -766,7 +766,7 @@ func (c *cache) add(key string, value ByteView) {
 	if c.lru == nil {
 		c.lru = &lru.Cache{
 			Now: NowFunc,
-			OnEvicted: func(key lru.Key, value interface{}, nonExpiredAndMemFull bool) {
+			OnEvicted: func(key lru.Key, value any, nonExpiredAndMemFull bool) {
 				val := value.(ByteView)
 				c.nbytes -= int64(len(key.(string))) + int64(val.Len())
 				c.nevict++

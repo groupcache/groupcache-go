@@ -85,7 +85,7 @@ func TestDistribution(t *testing.T) {
 
 	strings := make([]string, cases)
 
-	for i := 0; i < cases; i++ {
+	for i := range cases {
 		r := rand.Int31()
 		ip := net.IPv4(192, byte(r>>16), byte(r>>8), byte(r))
 		strings[i] = ip.String()
@@ -127,15 +127,13 @@ func benchmarkGet(b *testing.B, shards int) {
 	hash := New(50, nil)
 
 	var buckets []string
-	for i := 0; i < shards; i++ {
+	for i := range shards {
 		buckets = append(buckets, fmt.Sprintf("shard-%d", i))
 	}
 
 	hash.Add(buckets...)
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		hash.Get(buckets[i&(shards-1)])
 	}
 }

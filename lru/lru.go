@@ -32,7 +32,7 @@ type Cache struct {
 
 	// OnEvicted optionally specifies a callback function to be
 	// executed when an entry is purged from the cache.
-	OnEvicted func(key Key, value interface{}, nonExpiredAndMemFull bool)
+	OnEvicted func(key Key, value any, nonExpiredAndMemFull bool)
 
 	// Now is the Now() function the cache will use to determine
 	// the current time which is used to calculate expired values
@@ -40,15 +40,15 @@ type Cache struct {
 	Now NowFunc
 
 	ll    *list.List
-	cache map[interface{}]*list.Element
+	cache map[any]*list.Element
 }
 
 // A Key may be any value that is comparable. See http://golang.org/ref/spec#Comparison_operators
-type Key interface{}
+type Key any
 
 type entry struct {
 	key    Key
-	value  interface{}
+	value  any
 	expire time.Time
 }
 
@@ -66,15 +66,15 @@ func New(maxEntries int) *Cache {
 	return &Cache{
 		MaxEntries: maxEntries,
 		ll:         list.New(),
-		cache:      make(map[interface{}]*list.Element),
+		cache:      make(map[any]*list.Element),
 		Now:        time.Now,
 	}
 }
 
 // Add adds a value to the cache.
-func (c *Cache) Add(key Key, value interface{}, expire time.Time) {
+func (c *Cache) Add(key Key, value any, expire time.Time) {
 	if c.cache == nil {
-		c.cache = make(map[interface{}]*list.Element)
+		c.cache = make(map[any]*list.Element)
 		c.ll = list.New()
 	}
 	if ee, ok := c.cache[key]; ok {
@@ -96,7 +96,7 @@ func (c *Cache) Add(key Key, value interface{}, expire time.Time) {
 }
 
 // Get looks up a key's value from the cache.
-func (c *Cache) Get(key Key) (value interface{}, ok bool) {
+func (c *Cache) Get(key Key) (value any, ok bool) {
 	if c.cache == nil {
 		return
 	}
