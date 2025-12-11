@@ -56,7 +56,7 @@ func TestByteView(t *testing.T) {
 }
 
 // of returns a byte view of the []byte or string in x.
-func of(x interface{}) ByteView {
+func of(x any) ByteView {
 	if bytes, ok := x.([]byte); ok {
 		return ByteView{b: bytes}
 	}
@@ -65,8 +65,8 @@ func of(x interface{}) ByteView {
 
 func TestByteViewEqual(t *testing.T) {
 	tests := []struct {
-		a    interface{} // string or []byte
-		b    interface{} // string or []byte
+		a    any // string or []byte
+		b    any // string or []byte
 		want bool
 	}{
 		{"x", "x", true},
@@ -103,7 +103,7 @@ func TestByteViewSlice(t *testing.T) {
 	tests := []struct {
 		in   string
 		from int
-		to   interface{} // nil to mean the end (SliceFrom); else int
+		to   any // nil to mean the end (SliceFrom); else int
 		want string
 	}{
 		{

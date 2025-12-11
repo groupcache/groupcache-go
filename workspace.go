@@ -26,7 +26,7 @@ func NewWorkspace() *Workspace {
 	return &Workspace{
 		groups: make(map[string]*Group),
 		bufferPool: sync.Pool{
-			New: func() interface{} { return new(bytes.Buffer) },
+			New: func() any { return new(bytes.Buffer) },
 		},
 	}
 }

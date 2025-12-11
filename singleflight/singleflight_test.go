@@ -28,7 +28,7 @@ import (
 
 func TestDo(t *testing.T) {
 	var g Group
-	v, err := g.Do("key", func() (interface{}, error) {
+	v, err := g.Do("key", func() (any, error) {
 		return "bar", nil
 	})
 	if got, want := fmt.Sprintf("%v (%T)", v, v), "bar (string)"; got != want {
@@ -42,7 +42,7 @@ func TestDo(t *testing.T) {
 func TestDoErr(t *testing.T) {
 	var g Group
 	someErr := errors.New("Some error")
-	v, err := g.Do("key", func() (interface{}, error) {
+	v, err := g.Do("key", func() (any, error) {
 		return nil, someErr
 	})
 	if err != someErr {
@@ -57,7 +57,7 @@ func TestDoDupSuppress(t *testing.T) {
 	var g Group
 	c := make(chan string)
 	var calls int32
-	fn := func() (interface{}, error) {
+	fn := func() (any, error) {
 		atomic.AddInt32(&calls, 1)
 		return <-c, nil
 	}
@@ -93,7 +93,7 @@ func TestDoPanic(t *testing.T) {
 			// do not let the panic below leak to the test
 			_ = recover()
 		}()
-		_, err = g.Do("key", func() (interface{}, error) {
+		_, err = g.Do("key", func() (any, error) {
 			panic("something went horribly wrong")
 		})
 	}()
@@ -101,7 +101,7 @@ func TestDoPanic(t *testing.T) {
 		t.Errorf("Do error = %v; want someErr", err)
 	}
 	// ensure subsequent calls to same key still work
-	v, err := g.Do("key", func() (interface{}, error) {
+	v, err := g.Do("key", func() (any, error) {
 		return "foo", nil
 	})
 	if err != nil {
@@ -116,7 +116,7 @@ func TestDoConcurrentPanic(t *testing.T) {
 	var g Group
 	c := make(chan struct{})
 	var calls int32
-	fn := func() (interface{}, error) {
+	fn := func() (any, error) {
 		atomic.AddInt32(&calls, 1)
 		<-c
 		panic("something went horribly wrong")
