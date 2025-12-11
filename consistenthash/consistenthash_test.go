@@ -133,9 +133,7 @@ func benchmarkGet(b *testing.B, shards int) {
 
 	hash.Add(buckets...)
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		hash.Get(buckets[i&(shards-1)])
 	}
 }
