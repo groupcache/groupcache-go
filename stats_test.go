@@ -67,6 +67,8 @@ func TestNewGroupInstrumentsRegistersAllCounters(t *testing.T) {
 		"groupcache.group.loads.deduped",
 		"groupcache.group.local.loads",
 		"groupcache.group.local.load_errors",
+		"groupcache.group.batch.removes",
+		"groupcache.group.batch.keys_removed",
 	}
 	assert.Equal(t, expectedCounters, meter.counterNames)
 	assert.Equal(t, []string{"groupcache.group.peer.latency_max_ms"}, meter.updownNames)
@@ -80,6 +82,8 @@ func TestNewGroupInstrumentsRegistersAllCounters(t *testing.T) {
 	assert.NotNil(t, inst.LocalLoadsCounter())
 	assert.NotNil(t, inst.LocalLoadErrsCounter())
 	assert.NotNil(t, inst.GetFromPeersLatencyMaxGauge())
+	assert.NotNil(t, inst.BatchRemovesCounter())
+	assert.NotNil(t, inst.BatchKeysRemovedCounter())
 }
 
 func TestNewGroupInstrumentsErrorsOnCounterFailure(t *testing.T) {

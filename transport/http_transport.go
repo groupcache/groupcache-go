@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -91,6 +92,12 @@ type Transport interface {
 
 	// ListenAddress returns the address the server is listening on after calling ListenAndServe().
 	ListenAddress() string
+}
+
+type transportMethods interface {
+	Get(ctx context.Context, key string, dest Sink) error
+	RemoteSet(string, []byte, time.Time)
+	LocalRemove(string)
 }
 
 // HttpTransportOptions options for creating a new HttpTransport
@@ -307,17 +314,16 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	groupName := parts[0]
 	key := parts[1]
 
-	type transportMethods interface {
-		Get(ctx context.Context, key string, dest Sink) error
-		RemoteSet(string, []byte, time.Time)
-		LocalRemove(string)
-	}
-
 	// Fetch the value for this group/key.
 	group := t.instance.GetGroup(groupName).(transportMethods)
 	if group == nil {
 		http.Error(w, "no such group: "+groupName, http.StatusNotFound)
 		recordError()
+		return
+	}
+
+	if strings.HasPrefix(key, "_batch/") {
+		t.handleBatchRequest(ctx, w, r, groupName, key, group, recordError)
 		return
 	}
 
@@ -399,6 +405,51 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/x-protobuf")
 	_, _ = w.Write(body)
+}
+
+func (t *HttpTransport) handleBatchRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, groupName string, path string, group transportMethods, recordError func()) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "batch operations require POST method", http.StatusMethodNotAllowed)
+		recordError()
+		return
+	}
+
+	defer r.Body.Close()
+
+	b := bufferPool.Get().(*bytes.Buffer)
+	b.Reset()
+	defer bufferPool.Put(b)
+	_, err := io.Copy(b, r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		recordError()
+		return
+	}
+
+	switch path {
+	case "_batch/remove":
+		t.handleBatchRemove(ctx, w, b.Bytes(), group, recordError)
+	default:
+		http.Error(w, "unknown batch operation: "+path, http.StatusBadRequest)
+		recordError()
+	}
+}
+
+// handleBatchRemove handles a batch remove request
+func (t *HttpTransport) handleBatchRemove(ctx context.Context, w http.ResponseWriter, body []byte, group transportMethods, recordError func()) {
+	var req pb.RemoveMultiRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
+		recordError()
+		return
+	}
+
+	// Remove each key locally
+	for _, key := range req.Keys {
+		group.LocalRemove(key)
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // NewClient creates a new http client for the provided peer
@@ -581,6 +632,33 @@ func (h *HttpClient) Remove(ctx context.Context, in *pb.GetRequest) error {
 	return nil
 }
 
+func (h *HttpClient) RemoveKeys(ctx context.Context, in *pb.RemoveMultiRequest) error {
+	ctx, span, endSpan := h.startSpan(ctx, "GroupCache.RemoveKeys")
+	defer endSpan()
+
+	body, err := json.Marshal(in)
+	if err != nil {
+		werr := fmt.Errorf("while marshaling RemoveMultiRequest body: %w", err)
+		return recordSpanError(span, werr)
+	}
+
+	var res http.Response
+	if err := h.makeBatchRequest(ctx, http.MethodPost, in.GetGroup(), "_batch/remove", bytes.NewReader(body), &res); err != nil {
+		return recordSpanError(span, err)
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(res.Body)
+		err := fmt.Errorf("server returned status %d: %s", res.StatusCode, msg)
+		return recordSpanError(span, err)
+	}
+
+	markSpanOK(span)
+	return nil
+}
+
 func (h *HttpClient) PeerInfo() peer.Info {
 	return h.info
 }
@@ -592,6 +670,34 @@ func (h *HttpClient) HashKey() string {
 type request interface {
 	GetGroup() string
 	GetKey() string
+}
+
+func (h *HttpClient) makeBatchRequest(ctx context.Context, method string, group string, path string, body io.Reader, out *http.Response) error {
+	u := fmt.Sprintf(
+		"%v%v/%v",
+		h.endpoint,
+		url.PathEscape(group),
+		path,
+	)
+
+	var bodyBytes []byte
+	if body != nil {
+		bodyBytes, _ = io.ReadAll(body)
+		body = bytes.NewReader(bodyBytes)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, u, body)
+	if err != nil {
+		return err
+	}
+
+	res, err := h.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	*out = *res
+	return nil
 }
 
 func (h *HttpClient) makeRequest(ctx context.Context, m string, in request, b io.Reader, out *http.Response) error {

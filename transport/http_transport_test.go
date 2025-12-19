@@ -335,6 +335,13 @@ func (t *tracingGroup) Name() string {
 	return groupName
 }
 
+func (t *tracingGroup) RemoveKeys(ctx context.Context, keys ...string) error {
+	for _, key := range keys {
+		t.LocalRemove(key)
+	}
+	return nil
+}
+
 func spanHasAttribute(span sdktrace.ReadOnlySpan, key attribute.Key, expected string) bool {
 	for _, attr := range span.Attributes() {
 		if attr.Key == key && attr.Value.AsString() == expected {

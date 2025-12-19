@@ -27,6 +27,7 @@ type Client interface {
 	Get(context context.Context, in *pb.GetRequest, out *pb.GetResponse) error
 	Remove(context context.Context, in *pb.GetRequest) error
 	Set(context context.Context, in *pb.SetRequest) error
+	RemoveKeys(context context.Context, in *pb.RemoveMultiRequest) error
 	PeerInfo() Info
 	HashKey() string
 }
@@ -46,6 +47,10 @@ func (e *NoOpClient) Remove(context context.Context, in *pb.GetRequest) error {
 }
 
 func (e *NoOpClient) Set(context context.Context, in *pb.SetRequest) error {
+	return nil
+}
+
+func (e *NoOpClient) RemoveKeys(context context.Context, in *pb.RemoveMultiRequest) error {
 	return nil
 }
 

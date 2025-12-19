@@ -42,6 +42,7 @@ type Group interface {
 	Remove(context.Context, string) error
 	UsedBytes() (int64, int64)
 	Name() string
+	RemoveKeys(ctx context.Context, keys ...string) error
 }
 
 // A Getter loads data for a key.
@@ -443,6 +444,79 @@ func (g *group) LocalRemove(key string) {
 	})
 }
 
+func (g *group) RemoveKeys(ctx context.Context, keys ...string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	g.Stats.BatchRemoves.Add(1)
+	g.Stats.BatchKeysRemoved.Add(int64(len(keys)))
+
+	keysByOwner := make(map[peer.Client][]string)
+	var localKeys []string
+
+	for _, key := range keys {
+		owner, isRemote := g.instance.PickPeer(key)
+		if isRemote {
+			keysByOwner[owner] = append(keysByOwner[owner], key)
+		} else {
+			localKeys = append(localKeys, key)
+		}
+	}
+
+	for _, key := range localKeys {
+		g.LocalRemove(key)
+	}
+
+	multiErr := &MultiError{}
+	errCh := make(chan error)
+
+	// Step 3: Send batch requests to owners (parallel)
+	var wg sync.WaitGroup
+	for owner, ownerKeys := range keysByOwner {
+		wg.Add(1)
+		go func(p peer.Client, k []string) {
+			errCh <- p.RemoveKeys(ctx, &pb.RemoveMultiRequest{
+				Group: &g.name,
+				Keys:  k,
+			})
+			wg.Done()
+		}(owner, ownerKeys)
+	}
+
+	allPeers := g.instance.getAllPeers()
+	for _, p := range allPeers {
+		if p.PeerInfo().IsSelf {
+			continue
+		}
+		if _, isOwner := keysByOwner[p]; isOwner {
+			continue
+		}
+
+		wg.Add(1)
+		go func(peer peer.Client) {
+			errCh <- peer.RemoveKeys(ctx, &pb.RemoveMultiRequest{
+				Group: &g.name,
+				Keys:  keys,
+			})
+			wg.Done()
+		}(p)
+	}
+
+	go func() {
+		wg.Wait()
+		close(errCh)
+	}()
+
+	for err := range errCh {
+		if err != nil {
+			multiErr.Add(err)
+		}
+	}
+
+	return multiErr.NilOrError()
+}
+
 func (g *group) populateCache(key string, value transport.ByteView, cache Cache) {
 	if g.maxCacheBytes <= 0 {
 		return
@@ -524,6 +598,8 @@ func (g *group) registerInstruments(meter otelmetric.Meter) error {
 		o.ObserveInt64(instruments.LocalLoadsCounter(), g.Stats.LocalLoads.Get(), observeOptions...)
 		o.ObserveInt64(instruments.LocalLoadErrsCounter(), g.Stats.LocalLoadErrs.Get(), observeOptions...)
 		o.ObserveInt64(instruments.GetFromPeersLatencyMaxGauge(), g.Stats.GetFromPeersLatencyLower.Get(), observeOptions...)
+		o.ObserveInt64(instruments.BatchRemovesCounter(), g.Stats.BatchRemoves.Get(), observeOptions...)
+		o.ObserveInt64(instruments.BatchKeysRemovedCounter(), g.Stats.BatchKeysRemoved.Get(), observeOptions...)
 
 		return nil
 	},
@@ -536,6 +612,8 @@ func (g *group) registerInstruments(meter otelmetric.Meter) error {
 		instruments.LocalLoadsCounter(),
 		instruments.LocalLoadErrsCounter(),
 		instruments.GetFromPeersLatencyMaxGauge(),
+		instruments.BatchRemovesCounter(),
+		instruments.BatchKeysRemovedCounter(),
 	)
 
 	return err
