@@ -22,10 +22,11 @@
 package pb
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -224,7 +225,7 @@ func (x *SetRequest) GetExpire() int64 {
 	return 0
 }
 
-type RemoveMultiRequest struct {
+type RemoveKeysRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -233,8 +234,8 @@ type RemoveMultiRequest struct {
 	Keys  []string `protobuf:"bytes,2,rep,name=keys" json:"keys,omitempty"`
 }
 
-func (x *RemoveMultiRequest) Reset() {
-	*x = RemoveMultiRequest{}
+func (x *RemoveKeysRequest) Reset() {
+	*x = RemoveKeysRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_transport_pb_groupcache_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -242,13 +243,13 @@ func (x *RemoveMultiRequest) Reset() {
 	}
 }
 
-func (x *RemoveMultiRequest) String() string {
+func (x *RemoveKeysRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RemoveMultiRequest) ProtoMessage() {}
+func (*RemoveKeysRequest) ProtoMessage() {}
 
-func (x *RemoveMultiRequest) ProtoReflect() protoreflect.Message {
+func (x *RemoveKeysRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_transport_pb_groupcache_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -260,26 +261,26 @@ func (x *RemoveMultiRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RemoveMultiRequest.ProtoReflect.Descriptor instead.
-func (*RemoveMultiRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use RemoveKeysRequest.ProtoReflect.Descriptor instead.
+func (*RemoveKeysRequest) Descriptor() ([]byte, []int) {
 	return file_transport_pb_groupcache_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *RemoveMultiRequest) GetGroup() string {
+func (x *RemoveKeysRequest) GetGroup() string {
 	if x != nil && x.Group != nil {
 		return *x.Group
 	}
 	return ""
 }
 
-func (x *RemoveMultiRequest) GetKeys() []string {
+func (x *RemoveKeysRequest) GetKeys() []string {
 	if x != nil {
 		return x.Keys
 	}
 	return nil
 }
 
-type RemoveMultiResponse struct {
+type RemoveKeysResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -287,8 +288,8 @@ type RemoveMultiResponse struct {
 	FailedKeys []string `protobuf:"bytes,1,rep,name=failed_keys,json=failedKeys" json:"failed_keys,omitempty"`
 }
 
-func (x *RemoveMultiResponse) Reset() {
-	*x = RemoveMultiResponse{}
+func (x *RemoveKeysResponse) Reset() {
+	*x = RemoveKeysResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_transport_pb_groupcache_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -296,13 +297,13 @@ func (x *RemoveMultiResponse) Reset() {
 	}
 }
 
-func (x *RemoveMultiResponse) String() string {
+func (x *RemoveKeysResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RemoveMultiResponse) ProtoMessage() {}
+func (*RemoveKeysResponse) ProtoMessage() {}
 
-func (x *RemoveMultiResponse) ProtoReflect() protoreflect.Message {
+func (x *RemoveKeysResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_transport_pb_groupcache_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -314,12 +315,12 @@ func (x *RemoveMultiResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RemoveMultiResponse.ProtoReflect.Descriptor instead.
-func (*RemoveMultiResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use RemoveKeysResponse.ProtoReflect.Descriptor instead.
+func (*RemoveKeysResponse) Descriptor() ([]byte, []int) {
 	return file_transport_pb_groupcache_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *RemoveMultiResponse) GetFailedKeys() []string {
+func (x *RemoveKeysResponse) GetFailedKeys() []string {
 	if x != nil {
 		return x.FailedKeys
 	}
@@ -377,11 +378,11 @@ func file_transport_pb_groupcache_proto_rawDescGZIP() []byte {
 
 var file_transport_pb_groupcache_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_transport_pb_groupcache_proto_goTypes = []interface{}{
-	(*GetRequest)(nil),          // 0: pb.GetRequest
-	(*GetResponse)(nil),         // 1: pb.GetResponse
-	(*SetRequest)(nil),          // 2: pb.SetRequest
-	(*RemoveMultiRequest)(nil),  // 3: pb.RemoveMultiRequest
-	(*RemoveMultiResponse)(nil), // 4: pb.RemoveMultiResponse
+	(*GetRequest)(nil),         // 0: pb.GetRequest
+	(*GetResponse)(nil),        // 1: pb.GetResponse
+	(*SetRequest)(nil),         // 2: pb.SetRequest
+	(*RemoveKeysRequest)(nil),  // 3: pb.RemoveKeysRequest
+	(*RemoveKeysResponse)(nil), // 4: pb.RemoveKeysResponse
 }
 var file_transport_pb_groupcache_proto_depIdxs = []int32{
 	0, // 0: pb.GroupCache.Get:input_type -> pb.GetRequest
@@ -436,7 +437,7 @@ func file_transport_pb_groupcache_proto_init() {
 			}
 		}
 		file_transport_pb_groupcache_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveMultiRequest); i {
+			switch v := v.(*RemoveKeysRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -448,7 +449,7 @@ func file_transport_pb_groupcache_proto_init() {
 			}
 		}
 		file_transport_pb_groupcache_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveMultiResponse); i {
+			switch v := v.(*RemoveKeysResponse); i {
 			case 0:
 				return &v.state
 			case 1:

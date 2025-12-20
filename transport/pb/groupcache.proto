@@ -37,12 +37,12 @@ message SetRequest {
   optional int64 expire = 4;
 }
 
-message RemoveMultiRequest {
+message RemoveKeysRequest {
   required string group = 1;
   repeated string keys = 2;
 }
 
-message RemoveMultiResponse {
+message RemoveKeysResponse {
   repeated string failed_keys = 1;
 }
 

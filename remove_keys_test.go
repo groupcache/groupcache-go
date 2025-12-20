@@ -147,18 +147,27 @@ func TestRemoveKeysStats(t *testing.T) {
 	})
 
 	// Register the group on ALL daemons
-	group, err := cluster.DaemonAt(0).NewGroup("test-remove-stats", 3000000, getter)
+	transportGroup, err := cluster.DaemonAt(0).NewGroup("test-remove-stats", 3000000, getter)
 	require.NoError(t, err)
 	_, err = cluster.DaemonAt(1).NewGroup("test-remove-stats", 3000000, getter)
 	require.NoError(t, err)
 
-	// Call RemoveKeys
+	// Cast to groupcache.Group to access GroupStats()
+	group, ok := transportGroup.(groupcache.Group)
+	require.True(t, ok, "expected transportGroup to implement groupcache.Group")
+
+	// Capture stats before RemoveKeys
+	statsBefore := group.GroupStats()
+	removeKeysRequestsBefore := statsBefore.RemoveKeysRequests.Get()
+	removedKeysBefore := statsBefore.RemovedKeys.Get()
+
 	err = group.RemoveKeys(ctx, "key1", "key2", "key3")
 	require.NoError(t, err)
 
-	// Note: Stats are internal to the group implementation
-	// The batch stats are incremented but not directly accessible via interface
-	// This test verifies that the operation completes without error
+	// Verify stats were incremented correctly
+	statsAfter := group.GroupStats()
+	assert.Equal(t, removeKeysRequestsBefore+1, statsAfter.RemoveKeysRequests.Get(), "RemoveKeysRequests should be incremented by 1")
+	assert.Equal(t, removedKeysBefore+3, statsAfter.RemovedKeys.Get(), "RemovedKeys should be incremented by 3")
 }
 
 func BenchmarkRemoveKeys(b *testing.B) {

@@ -144,7 +144,7 @@ func (c *MockClient) Set(ctx context.Context, in *pb.SetRequest) error {
 	return nil
 }
 
-func (c *MockClient) RemoveKeys(ctx context.Context, in *pb.RemoveMultiRequest) error {
+func (c *MockClient) RemoveKeys(ctx context.Context, in *pb.RemoveKeysRequest) error {
 	c.addCall("RemoveKeys", len(in.Keys))
 	// TODO: Implement when needed
 	return nil

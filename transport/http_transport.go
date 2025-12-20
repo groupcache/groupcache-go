@@ -322,11 +322,6 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.HasPrefix(key, "_batch/") {
-		t.handleBatchRequest(ctx, w, r, groupName, key, group, recordError)
-		return
-	}
-
 	// Delete the key and return 200
 	if r.Method == http.MethodDelete {
 		group.LocalRemove(key)
@@ -364,8 +359,18 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method == http.MethodPost {
+		if strings.HasPrefix(key, "_remove-keys/") {
+			t.handleRemoveKeysRequest(ctx, w, r, group, recordError)
+			return
+		}
+		http.Error(w, "invalid path for POST method", http.StatusNotFound)
+		recordError()
+		return
+	}
+
 	if r.Method != http.MethodGet {
-		http.Error(w, "Only GET, DELETE, PUT are supported", http.StatusMethodNotAllowed)
+		http.Error(w, "Only GET, DELETE, PUT, POST are supported", http.StatusMethodNotAllowed)
 		recordError()
 		return
 	}
@@ -407,13 +412,7 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-func (t *HttpTransport) handleBatchRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, groupName string, path string, group transportMethods, recordError func()) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "batch operations require POST method", http.StatusMethodNotAllowed)
-		recordError()
-		return
-	}
-
+func (t *HttpTransport) handleRemoveKeysRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, group transportMethods, recordError func()) {
 	defer r.Body.Close()
 
 	b := bufferPool.Get().(*bytes.Buffer)
@@ -426,25 +425,13 @@ func (t *HttpTransport) handleBatchRequest(ctx context.Context, w http.ResponseW
 		return
 	}
 
-	switch path {
-	case "_batch/remove":
-		t.handleBatchRemove(ctx, w, b.Bytes(), group, recordError)
-	default:
-		http.Error(w, "unknown batch operation: "+path, http.StatusBadRequest)
-		recordError()
-	}
-}
-
-// handleBatchRemove handles a batch remove request
-func (t *HttpTransport) handleBatchRemove(ctx context.Context, w http.ResponseWriter, body []byte, group transportMethods, recordError func()) {
-	var req pb.RemoveMultiRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	var req pb.RemoveKeysRequest
+	if err := json.Unmarshal(b.Bytes(), &req); err != nil {
 		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
 		recordError()
 		return
 	}
 
-	// Remove each key locally
 	for _, key := range req.Keys {
 		group.LocalRemove(key)
 	}
@@ -632,18 +619,18 @@ func (h *HttpClient) Remove(ctx context.Context, in *pb.GetRequest) error {
 	return nil
 }
 
-func (h *HttpClient) RemoveKeys(ctx context.Context, in *pb.RemoveMultiRequest) error {
+func (h *HttpClient) RemoveKeys(ctx context.Context, in *pb.RemoveKeysRequest) error {
 	ctx, span, endSpan := h.startSpan(ctx, "GroupCache.RemoveKeys")
 	defer endSpan()
 
 	body, err := json.Marshal(in)
 	if err != nil {
-		werr := fmt.Errorf("while marshaling RemoveMultiRequest body: %w", err)
+		werr := fmt.Errorf("while marshaling RemoveKeysRequest body: %w", err)
 		return recordSpanError(span, werr)
 	}
 
 	var res http.Response
-	if err := h.makeBatchRequest(ctx, http.MethodPost, in.GetGroup(), "_batch/remove", bytes.NewReader(body), &res); err != nil {
+	if err := h.makeRemoveKeysRequest(ctx, http.MethodPost, in.GetGroup(), "_remove-keys/", bytes.NewReader(body), &res); err != nil {
 		return recordSpanError(span, err)
 	}
 
@@ -672,19 +659,13 @@ type request interface {
 	GetKey() string
 }
 
-func (h *HttpClient) makeBatchRequest(ctx context.Context, method string, group string, path string, body io.Reader, out *http.Response) error {
+func (h *HttpClient) makeRemoveKeysRequest(ctx context.Context, method string, group string, path string, body io.Reader, out *http.Response) error {
 	u := fmt.Sprintf(
 		"%v%v/%v",
 		h.endpoint,
 		url.PathEscape(group),
 		path,
 	)
-
-	var bodyBytes []byte
-	if body != nil {
-		bodyBytes, _ = io.ReadAll(body)
-		body = bytes.NewReader(bodyBytes)
-	}
 
 	req, err := http.NewRequestWithContext(ctx, method, u, body)
 	if err != nil {
