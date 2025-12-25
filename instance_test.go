@@ -479,7 +479,7 @@ func TestSetValueOnAllPeers(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the value exists on all peers
-	for i, g := range groups {
+	for _, g := range groups {
 		var result string
 		err := g.Get(ctx, "key", transport.StringSink(&result))
 		require.NoError(t, err)
@@ -491,7 +491,7 @@ func TestSetValueOnAllPeers(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the value was updated
-	for i, g := range groups {
+	for _, g := range groups {
 		var result string
 		err := g.Get(ctx, "key", transport.StringSink(&result))
 		require.NoError(t, err)
