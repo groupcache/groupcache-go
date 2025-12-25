@@ -47,8 +47,6 @@ func newRecorderTracerProvider() *recorderTracerProvider {
 
 // nolint
 func TestNewTracerUsesGlobalProviderWhenNoneProvided(t *testing.T) {
-	t.Parallel()
-
 	original := otel.GetTracerProvider()
 	rec := newRecorderTracerProvider()
 	otel.SetTracerProvider(rec)
@@ -63,8 +61,6 @@ func TestNewTracerUsesGlobalProviderWhenNoneProvided(t *testing.T) {
 
 // nolint
 func TestNewTracerRespectsCustomProviderOption(t *testing.T) {
-	t.Parallel()
-
 	original := otel.GetTracerProvider()
 	defer otel.SetTracerProvider(original)
 
