@@ -45,7 +45,7 @@ func TestNewMeterProviderRespectsOverride(t *testing.T) {
 
 	require.Equal(t, custom, mp.underlying)
 	assert.Contains(t, custom.requested, instrumentationName)
-	assert.Equal(t, initialGlobalRequests, len(global.requested), "global provider should not be invoked when override is provided")
+	assert.Equal(t, initialGlobalRequests, len(global.requested))
 	assert.Same(t, custom.meter, mp.getMeter())
 }
 

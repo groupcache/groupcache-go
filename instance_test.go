@@ -479,11 +479,11 @@ func TestSetValueOnAllPeers(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the value exists on all peers
-	for i, g := range groups {
+	for _, g := range groups {
 		var result string
 		err := g.Get(ctx, "key", transport.StringSink(&result))
-		require.NoError(t, err, "Failed to get value from peer %d", i)
-		assert.Equal(t, "value", result, "Unexpected value from peer %d", i)
+		require.NoError(t, err)
+		assert.Equal(t, "value", result)
 	}
 
 	// Update the value on the second group
@@ -491,11 +491,11 @@ func TestSetValueOnAllPeers(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the value was updated
-	for i, g := range groups {
+	for _, g := range groups {
 		var result string
 		err := g.Get(ctx, "key", transport.StringSink(&result))
-		require.NoError(t, err, "Failed to get value from peer %d", i)
-		assert.Equal(t, "foo", result, "Unexpected value from peer %d", i)
+		require.NoError(t, err)
+		assert.Equal(t, "foo", result)
 	}
 }
 
@@ -528,7 +528,7 @@ func TestNewGroupRegistersMetricsWithMeterProvider(t *testing.T) {
 	}
 	assert.Equal(t, expectedCounters, recMeter.counterNames)
 	assert.Equal(t, []string{"groupcache.group.peer.latency_max_ms"}, recMeter.updownNames)
-	assert.True(t, recMeter.callbackRegistered, "expected callback registration for metrics")
+	assert.True(t, recMeter.callbackRegistered)
 	assert.Equal(t, 11, recMeter.instrumentCount)
 }
 
@@ -546,7 +546,7 @@ func TestNewGroupFailsWhenMetricRegistrationFails(t *testing.T) {
 	}))
 	require.Error(t, err)
 	assert.Nil(t, g)
-	assert.True(t, failMeter.counterCalled, "expected metrics creation to be attempted")
+	assert.True(t, failMeter.counterCalled)
 }
 
 type recordingMeterProvider struct {
