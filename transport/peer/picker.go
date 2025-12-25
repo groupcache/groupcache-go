@@ -49,14 +49,18 @@ type Options struct {
 	Replicas int
 }
 
+// entry represents a hash ring entry containing both the hash value and the client.
+type entry struct {
+	hash   int
+	client Client
+}
+
 // Picker represents a data structure for picking a peer based on a given key.
 // It uses consistent hashing to distribute keys among the available peers.
 type Picker struct {
 	opts Options
-	// keys is a stored list of all keys in the ring
-	keys []int
-	// hashMap contains the key ring
-	hashMap map[int]Client
+	// keys is a stored list of all entries in the ring, sorted by hash
+	keys []entry
 	// clientMap contains a list of added clients by key
 	clientMap map[string]Client
 }
@@ -76,7 +80,6 @@ type Picker struct {
 func NewPicker(opts Options) *Picker {
 	m := &Picker{
 		opts:      opts,
-		hashMap:   make(map[int]Client),
 		clientMap: make(map[string]Client),
 	}
 	if m.opts.HashFn == nil {
@@ -117,10 +120,9 @@ func (p *Picker) Add(client Client) {
 	p.clientMap[client.HashKey()] = client
 	for i := 0; i < p.opts.Replicas; i++ {
 		hash := int(p.opts.HashFn([]byte(fmt.Sprintf("%x", md5.Sum([]byte(strconv.Itoa(i)+client.HashKey()))))))
-		p.keys = append(p.keys, hash)
-		p.hashMap[hash] = client
+		p.keys = append(p.keys, entry{hash: hash, client: client})
 	}
-	sort.Ints(p.keys)
+	sort.Slice(p.keys, func(i, j int) bool { return p.keys[i].hash < p.keys[j].hash })
 }
 
 // Get the closest client in the hash to the provided key.
@@ -132,12 +134,12 @@ func (p *Picker) Get(key string) Client {
 	hash := int(p.opts.HashFn([]byte(key)))
 
 	// Binary search for appropriate replica.
-	idx := sort.Search(len(p.keys), func(i int) bool { return p.keys[i] >= hash })
+	idx := sort.Search(len(p.keys), func(i int) bool { return p.keys[i].hash >= hash })
 
 	// Means we have cycled back to the first replica.
 	if idx == len(p.keys) {
 		idx = 0
 	}
 
-	return p.hashMap[p.keys[idx]]
+	return p.keys[idx].client
 }
