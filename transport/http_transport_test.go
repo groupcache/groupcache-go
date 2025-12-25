@@ -182,7 +182,7 @@ func TestHttpTransportWithTracerEmitsServerSpan(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	spans := recorder.Ended()
-	require.NotEmpty(t, spans, "expected otelhttp handler to record a span when tracer is configured")
+	require.NotEmpty(t, spans)
 
 	var serverSpanFound bool
 	for _, span := range spans {
@@ -191,7 +191,7 @@ func TestHttpTransportWithTracerEmitsServerSpan(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, serverSpanFound, "expected a server span recorded by the tracer provider")
+	assert.True(t, serverSpanFound)
 }
 
 // nolint

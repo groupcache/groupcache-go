@@ -62,7 +62,7 @@ func TestRemoveKeys(t *testing.T) {
 
 	// Verify getter was called for each key
 	for _, key := range keys {
-		assert.Equal(t, 1, callCount[key], "getter should be called once for %s", key)
+		assert.Equal(t, 1, callCount[key])
 	}
 
 	// Now remove all keys using variadic signature
@@ -78,7 +78,7 @@ func TestRemoveKeys(t *testing.T) {
 
 	// Verify getter was called again for each key
 	for _, key := range keys {
-		assert.Equal(t, 2, callCount[key], "getter should be called twice for %s after removal", key)
+		assert.Equal(t, 2, callCount[key])
 	}
 }
 
@@ -154,7 +154,7 @@ func TestRemoveKeysStats(t *testing.T) {
 
 	// Cast to groupcache.Group to access GroupStats()
 	group, ok := transportGroup.(groupcache.Group)
-	require.True(t, ok, "expected transportGroup to implement groupcache.Group")
+	require.True(t, ok)
 
 	// Capture stats before RemoveKeys
 	statsBefore := group.GroupStats()
@@ -166,8 +166,8 @@ func TestRemoveKeysStats(t *testing.T) {
 
 	// Verify stats were incremented correctly
 	statsAfter := group.GroupStats()
-	assert.Equal(t, removeKeysRequestsBefore+1, statsAfter.RemoveKeysRequests.Get(), "RemoveKeysRequests should be incremented by 1")
-	assert.Equal(t, removedKeysBefore+3, statsAfter.RemovedKeys.Get(), "RemovedKeys should be incremented by 3")
+	assert.Equal(t, removeKeysRequestsBefore+1, statsAfter.RemoveKeysRequests.Get())
+	assert.Equal(t, removedKeysBefore+3, statsAfter.RemovedKeys.Get())
 }
 
 func BenchmarkRemoveKeys(b *testing.B) {
