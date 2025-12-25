@@ -196,7 +196,7 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// The read the body and set the key value
 	if r.Method == http.MethodPut {
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 		b := group.ws.bufferPool.Get().(*bytes.Buffer)
 		b.Reset()
 		defer group.ws.bufferPool.Put(b)
@@ -273,7 +273,7 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-protobuf")
-	w.Write(body)
+	_, _ = w.Write(body)
 }
 
 type httpGetter struct {
@@ -334,7 +334,7 @@ func (h *httpGetter) Get(ctx context.Context, in *pb.GetRequest,
 	if err := h.makeRequest(ctx, http.MethodGet, in, rd, &res); err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		// Limit reading the error body to max 1 MiB
 		msg, _ := io.ReadAll(io.LimitReader(res.Body, 1024*1024))
@@ -372,7 +372,7 @@ func (h *httpGetter) Set(ctx context.Context, in *pb.SetRequest) error {
 	if err := h.makeRequest(ctx, http.MethodPut, in, bytes.NewReader(body), &res); err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(res.Body)
@@ -389,7 +389,7 @@ func (h *httpGetter) Remove(ctx context.Context, in *pb.GetRequest) error {
 	if err := h.makeRequest(ctx, http.MethodDelete, in, nil, &res); err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(res.Body)

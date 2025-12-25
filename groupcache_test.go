@@ -253,7 +253,7 @@ func TestCacheEviction(t *testing.T) {
 	for bytesFlooded < cacheSize+1024 {
 		var res string
 		key := fmt.Sprintf("dummy-key-%d", bytesFlooded)
-		stringGroup.Get(dummyCtx, key, StringSink(&res), nil)
+		_ = stringGroup.Get(dummyCtx, key, StringSink(&res), nil)
 		bytesFlooded += int64(len(key) + len(res))
 	}
 	evicts := g.mainCache.nevict - evict0
@@ -417,7 +417,9 @@ func TestAllocatingByteSliceTarget(t *testing.T) {
 	sink := AllocatingByteSliceSink(&dst)
 
 	inBytes := []byte("some bytes")
-	sink.SetBytes(inBytes, time.Time{})
+	if err := sink.SetBytes(inBytes, time.Time{}); err != nil {
+		t.Fatalf("SetBytes failed: %v", err)
+	}
 	if want := "some bytes"; string(dst) != want {
 		t.Errorf("SetBytes resulted in %q; want %q", dst, want)
 	}

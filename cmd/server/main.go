@@ -65,8 +65,11 @@ func main() {
 		&groupcache.HTTPPoolOptions{})
 	pool.Set(p...)
 
-	http.HandleFunc("/set", func(_ http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
+	http.HandleFunc("/set", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		key := r.FormValue("key")
 		value := r.FormValue("value")
 		fmt.Printf("Set: [%s]%s\n", key, value)
@@ -87,8 +90,8 @@ func main() {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		w.Write(b)
-		w.Write([]byte{'\n'})
+		_, _ = w.Write(b)
+		_, _ = w.Write([]byte{'\n'})
 	})
 
 	http.HandleFunc("/cachewithcontext", func(w http.ResponseWriter, r *http.Request) {
@@ -107,8 +110,8 @@ func main() {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		w.Write(b)
-		w.Write([]byte{'\n'})
+		_, _ = w.Write(b)
+		_, _ = w.Write([]byte{'\n'})
 	})
 
 	server := http.Server{

@@ -58,8 +58,8 @@ func TestHTTPPool(t *testing.T) {
 	)
 
 	var serverHits int
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Hello")
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprintln(w, "Hello")
 		serverHits++
 	}))
 	defer ts.Close()
@@ -90,7 +90,7 @@ func TestHTTPPool(t *testing.T) {
 	defer func() {
 		for i := range nChild {
 			if cmds[i].Process != nil {
-				cmds[i].Process.Kill()
+				_ = cmds[i].Process.Kill()
 			}
 		}
 	}()
@@ -248,8 +248,7 @@ func beChildForTestHTTPPool(t *testing.T) {
 			t.Logf("HTTP request from getter failed with '%s'", err)
 		}
 
-		dest.SetString(strconv.Itoa(*peerIndex)+":"+key, time.Time{})
-		return nil
+		return dest.SetString(strconv.Itoa(*peerIndex)+":"+key, time.Time{})
 	})
 	const purgeExpired = true
 	NewGroupWithWorkspace(Options{
@@ -272,7 +271,7 @@ func pickFreeAddr(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	return l.Addr().String()
 }
 
@@ -292,7 +291,7 @@ func awaitAddrReady(_ /*t*/ *testing.T, addr string, wg *sync.WaitGroup) {
 		tries++
 		c, err := net.Dial("tcp", addr)
 		if err == nil {
-			c.Close()
+			_ = c.Close()
 			return
 		}
 		delay := time.Duration(tries) * 25 * time.Millisecond
@@ -321,7 +320,7 @@ func TestGetWithUserinfo(t *testing.T) {
 		Addr:    addr,
 		Handler: pool,
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
