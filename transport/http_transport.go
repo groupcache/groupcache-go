@@ -413,7 +413,7 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *HttpTransport) handleRemoveKeysRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, group transportMethods, recordError func()) {
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	b := bufferPool.Get().(*bytes.Buffer)
 	b.Reset()
@@ -634,7 +634,7 @@ func (h *HttpClient) RemoveKeys(ctx context.Context, in *pb.RemoveKeysRequest) e
 		return recordSpanError(span, err)
 	}
 
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(res.Body)
