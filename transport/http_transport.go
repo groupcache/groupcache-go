@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -91,6 +92,12 @@ type Transport interface {
 
 	// ListenAddress returns the address the server is listening on after calling ListenAndServe().
 	ListenAddress() string
+}
+
+type transportMethods interface {
+	Get(ctx context.Context, key string, dest Sink) error
+	RemoteSet(string, []byte, time.Time)
+	LocalRemove(string)
 }
 
 // HttpTransportOptions options for creating a new HttpTransport
@@ -307,12 +314,6 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	groupName := parts[0]
 	key := parts[1]
 
-	type transportMethods interface {
-		Get(ctx context.Context, key string, dest Sink) error
-		RemoteSet(string, []byte, time.Time)
-		LocalRemove(string)
-	}
-
 	// Fetch the value for this group/key.
 	group := t.instance.GetGroup(groupName).(transportMethods)
 	if group == nil {
@@ -358,8 +359,18 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method == http.MethodPost {
+		if strings.HasPrefix(key, "_remove-keys/") {
+			t.handleRemoveKeysRequest(ctx, w, r, group, recordError)
+			return
+		}
+		http.Error(w, "invalid path for POST method", http.StatusNotFound)
+		recordError()
+		return
+	}
+
 	if r.Method != http.MethodGet {
-		http.Error(w, "Only GET, DELETE, PUT are supported", http.StatusMethodNotAllowed)
+		http.Error(w, "Only GET, DELETE, PUT, POST are supported", http.StatusMethodNotAllowed)
 		recordError()
 		return
 	}
@@ -399,6 +410,33 @@ func (t *HttpTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/x-protobuf")
 	_, _ = w.Write(body)
+}
+
+func (t *HttpTransport) handleRemoveKeysRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, group transportMethods, recordError func()) {
+	defer r.Body.Close()
+
+	b := bufferPool.Get().(*bytes.Buffer)
+	b.Reset()
+	defer bufferPool.Put(b)
+	_, err := io.Copy(b, r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		recordError()
+		return
+	}
+
+	var req pb.RemoveKeysRequest
+	if err := json.Unmarshal(b.Bytes(), &req); err != nil {
+		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
+		recordError()
+		return
+	}
+
+	for _, key := range req.Keys {
+		group.LocalRemove(key)
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // NewClient creates a new http client for the provided peer
@@ -581,6 +619,33 @@ func (h *HttpClient) Remove(ctx context.Context, in *pb.GetRequest) error {
 	return nil
 }
 
+func (h *HttpClient) RemoveKeys(ctx context.Context, in *pb.RemoveKeysRequest) error {
+	ctx, span, endSpan := h.startSpan(ctx, "GroupCache.RemoveKeys")
+	defer endSpan()
+
+	body, err := json.Marshal(in)
+	if err != nil {
+		werr := fmt.Errorf("while marshaling RemoveKeysRequest body: %w", err)
+		return recordSpanError(span, werr)
+	}
+
+	var res http.Response
+	if err := h.makeRemoveKeysRequest(ctx, http.MethodPost, in.GetGroup(), "_remove-keys/", bytes.NewReader(body), &res); err != nil {
+		return recordSpanError(span, err)
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(res.Body)
+		err := fmt.Errorf("server returned status %d: %s", res.StatusCode, msg)
+		return recordSpanError(span, err)
+	}
+
+	markSpanOK(span)
+	return nil
+}
+
 func (h *HttpClient) PeerInfo() peer.Info {
 	return h.info
 }
@@ -592,6 +657,28 @@ func (h *HttpClient) HashKey() string {
 type request interface {
 	GetGroup() string
 	GetKey() string
+}
+
+func (h *HttpClient) makeRemoveKeysRequest(ctx context.Context, method string, group string, path string, body io.Reader, out *http.Response) error {
+	u := fmt.Sprintf(
+		"%v%v/%v",
+		h.endpoint,
+		url.PathEscape(group),
+		path,
+	)
+
+	req, err := http.NewRequestWithContext(ctx, method, u, body)
+	if err != nil {
+		return err
+	}
+
+	res, err := h.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	*out = *res
+	return nil
 }
 
 func (h *HttpClient) makeRequest(ctx context.Context, m string, in request, b io.Reader, out *http.Response) error {

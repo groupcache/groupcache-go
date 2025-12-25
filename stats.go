@@ -80,6 +80,8 @@ type GroupStats struct {
 	LoadsDeduped             AtomicInt // after singleflight
 	LocalLoads               AtomicInt // total good local loads
 	LocalLoadErrs            AtomicInt // total bad local loads
+	RemoveKeysRequests       AtomicInt // total RemoveKeys requests
+	RemovedKeys              AtomicInt // total keys removed via RemoveKeys
 }
 
 type MeterProviderOption func(*MeterProvider)
@@ -124,6 +126,8 @@ type groupInstruments struct {
 	localLoadsCounter           metric.Int64ObservableCounter
 	localLoadErrsCounter        metric.Int64ObservableCounter
 	getFromPeersLatencyMaxGauge metric.Int64ObservableUpDownCounter
+	removeKeysRequestsCounter metric.Int64ObservableCounter
+	removedKeysCounter        metric.Int64ObservableCounter
 }
 
 // newGroupInstruments registers all instruments that map to GroupStats counters.
@@ -200,6 +204,22 @@ func newGroupInstruments(meter metric.Meter) (*groupInstruments, error) {
 		return nil, err
 	}
 
+	removeKeysRequestsCounter, err := meter.Int64ObservableCounter(
+		"groupcache.group.remove_keys.requests",
+		metric.WithDescription("Total RemoveKeys requests"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	removedKeysCounter, err := meter.Int64ObservableCounter(
+		"groupcache.group.removed_keys",
+		metric.WithDescription("Total keys removed via RemoveKeys"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &groupInstruments{
 		getsCounter:                 getsCounter,
 		hitsCounter:                 hitsCounter,
@@ -210,6 +230,8 @@ func newGroupInstruments(meter metric.Meter) (*groupInstruments, error) {
 		localLoadsCounter:           localLoadsCounter,
 		localLoadErrsCounter:        localLoadErrsCounter,
 		getFromPeersLatencyMaxGauge: getFromPeersLatencyMaxGauge,
+		removeKeysRequestsCounter:   removeKeysRequestsCounter,
+		removedKeysCounter:          removedKeysCounter,
 	}, nil
 }
 
@@ -247,6 +269,14 @@ func (gm *groupInstruments) LocalLoadErrsCounter() metric.Int64ObservableCounter
 
 func (gm *groupInstruments) GetFromPeersLatencyMaxGauge() metric.Int64ObservableUpDownCounter {
 	return gm.getFromPeersLatencyMaxGauge
+}
+
+func (gm *groupInstruments) RemoveKeysRequestsCounter() metric.Int64ObservableCounter {
+	return gm.removeKeysRequestsCounter
+}
+
+func (gm *groupInstruments) RemovedKeysCounter() metric.Int64ObservableCounter {
+	return gm.removedKeysCounter
 }
 
 type cacheInstruments struct {

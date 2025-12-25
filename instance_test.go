@@ -523,11 +523,13 @@ func TestNewGroupRegistersMetricsWithMeterProvider(t *testing.T) {
 		"groupcache.group.loads.deduped",
 		"groupcache.group.local.loads",
 		"groupcache.group.local.load_errors",
+		"groupcache.group.remove_keys.requests",
+		"groupcache.group.removed_keys",
 	}
 	assert.Equal(t, expectedCounters, recMeter.counterNames)
 	assert.Equal(t, []string{"groupcache.group.peer.latency_max_ms"}, recMeter.updownNames)
 	assert.True(t, recMeter.callbackRegistered, "expected callback registration for metrics")
-	assert.Equal(t, 9, recMeter.instrumentCount)
+	assert.Equal(t, 11, recMeter.instrumentCount)
 }
 
 func TestNewGroupFailsWhenMetricRegistrationFails(t *testing.T) {

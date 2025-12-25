@@ -27,4 +27,5 @@ type Group interface {
 	Remove(context.Context, string) error
 	UsedBytes() (int64, int64)
 	Name() string
+	RemoveKeys(ctx context.Context, keys ...string) error
 }
