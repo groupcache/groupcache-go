@@ -515,6 +515,7 @@ func TestNewGroupRegistersMetricsWithMeterProvider(t *testing.T) {
 	require.NotNil(t, g)
 
 	expectedCounters := []string{
+		// group-level counters
 		"groupcache.group.gets",
 		"groupcache.group.cache_hits",
 		"groupcache.group.peer.loads",
@@ -525,11 +526,21 @@ func TestNewGroupRegistersMetricsWithMeterProvider(t *testing.T) {
 		"groupcache.group.local.load_errors",
 		"groupcache.group.remove_keys.requests",
 		"groupcache.group.removed_keys",
+		// cache-level counters (shared by main and hot caches)
+		"groupcache.cache.rejected",
+		"groupcache.cache.gets",
+		"groupcache.cache.hits",
+		"groupcache.cache.evictions",
 	}
 	assert.Equal(t, expectedCounters, recMeter.counterNames)
-	assert.Equal(t, []string{"groupcache.group.peer.latency_max_ms"}, recMeter.updownNames)
+	assert.Equal(t, []string{
+		"groupcache.group.peer.latency_max_ms",
+		"groupcache.cache.bytes",
+		"groupcache.cache.items",
+	}, recMeter.updownNames)
 	assert.True(t, recMeter.callbackRegistered)
-	assert.Equal(t, 11, recMeter.instrumentCount)
+	// 11 group instruments + 6 cache instruments per cache (main + hot) = 11 + 6 + 6 = 23
+	assert.Equal(t, 23, recMeter.instrumentCount)
 }
 
 func TestNewGroupFailsWhenMetricRegistrationFails(t *testing.T) {
@@ -579,7 +590,7 @@ func (m *recordingMeter) Int64ObservableUpDownCounter(name string, _ ...metric.I
 
 func (m *recordingMeter) RegisterCallback(f metric.Callback, instruments ...metric.Observable) (metric.Registration, error) {
 	m.callbackRegistered = true
-	m.instrumentCount = len(instruments)
+	m.instrumentCount += len(instruments)
 	// Invoke the callback once to ensure it tolerates being called with nil ctx/observer
 	_ = f(context.Background(), noop.Observer{})
 	return noop.Registration{}, nil

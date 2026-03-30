@@ -112,7 +112,7 @@ func TestNewCacheInstrumentsErrorsOnCounterFailure(t *testing.T) {
 	t.Parallel()
 
 	expectedErr := errors.New("counter fail")
-	meter := &failingSyncMeter{counterErr: expectedErr}
+	meter := &failingObservableMeter{counterErr: expectedErr}
 
 	inst, err := newCacheInstruments(meter)
 	require.ErrorIs(t, err, expectedErr)
@@ -123,7 +123,7 @@ func TestNewCacheInstrumentsErrorsOnUpDownCounterFailure(t *testing.T) {
 	t.Parallel()
 
 	expectedErr := errors.New("updown fail")
-	meter := &failingSyncMeter{upDownErr: expectedErr}
+	meter := &failingObservableMeter{upDownErr: expectedErr}
 
 	inst, err := newCacheInstruments(meter)
 	require.ErrorIs(t, err, expectedErr)
@@ -150,7 +150,7 @@ func TestNewGroupPropagatesMetricRegistrationError(t *testing.T) {
 func TestNewCacheInstrumentsRegistersAllCounters(t *testing.T) {
 	t.Parallel()
 
-	meter := &recordingSyncMeter{}
+	meter := &recordingMeter{}
 
 	inst, err := newCacheInstruments(meter)
 	require.NoError(t, err)
@@ -229,27 +229,6 @@ func (m *failingObservableMeter) Int64ObservableUpDownCounter(string, ...metric.
 	return noop.Int64ObservableUpDownCounter{}, nil
 }
 
-type failingSyncMeter struct {
-	noop.Meter
-
-	counterErr error
-	upDownErr  error
-}
-
-func (m *failingSyncMeter) Int64Counter(string, ...metric.Int64CounterOption) (metric.Int64Counter, error) {
-	if m.counterErr != nil {
-		return nil, m.counterErr
-	}
-	return noop.Int64Counter{}, nil
-}
-
-func (m *failingSyncMeter) Int64UpDownCounter(string, ...metric.Int64UpDownCounterOption) (metric.Int64UpDownCounter, error) {
-	if m.upDownErr != nil {
-		return nil, m.upDownErr
-	}
-	return noop.Int64UpDownCounter{}, nil
-}
-
 type staticMeterProvider struct {
 	noop.MeterProvider
 	meter metric.Meter
@@ -259,19 +238,3 @@ func (s *staticMeterProvider) Meter(string, ...metric.MeterOption) metric.Meter 
 	return s.meter
 }
 
-type recordingSyncMeter struct {
-	noop.Meter
-
-	counterNames []string
-	updownNames  []string
-}
-
-func (m *recordingSyncMeter) Int64Counter(name string, _ ...metric.Int64CounterOption) (metric.Int64Counter, error) {
-	m.counterNames = append(m.counterNames, name)
-	return noop.Int64Counter{}, nil
-}
-
-func (m *recordingSyncMeter) Int64UpDownCounter(name string, _ ...metric.Int64UpDownCounterOption) (metric.Int64UpDownCounter, error) {
-	m.updownNames = append(m.updownNames, name)
-	return noop.Int64UpDownCounter{}, nil
-}
