@@ -38,7 +38,9 @@ func ListenAndServe(ctx context.Context, address string, opts Options) (*Daemon,
 	}
 
 	if opts.Transport == nil {
-		opts.Transport = transport.NewHttpTransport(transport.HttpTransportOptions{})
+		opts.Transport = transport.NewHttpTransport(transport.HttpTransportOptions{
+			Logger: opts.Logger,
+		})
 	}
 
 	daemon := &Daemon{
