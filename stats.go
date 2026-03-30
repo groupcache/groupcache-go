@@ -280,23 +280,23 @@ func (gm *groupInstruments) RemovedKeysCounter() metric.Int64ObservableCounter {
 }
 
 type cacheInstruments struct {
-	rejectedCounter  metric.Int64Counter
-	bytesGauge       metric.Int64UpDownCounter
-	itemsGauge       metric.Int64UpDownCounter
-	getsCounter      metric.Int64Counter
-	hitsCounter      metric.Int64Counter
-	evictionsCounter metric.Int64Counter
+	rejectedCounter  metric.Int64ObservableCounter
+	bytesGauge       metric.Int64ObservableUpDownCounter
+	itemsGauge       metric.Int64ObservableUpDownCounter
+	getsCounter      metric.Int64ObservableCounter
+	hitsCounter      metric.Int64ObservableCounter
+	evictionsCounter metric.Int64ObservableCounter
 }
 
 func newCacheInstruments(meter metric.Meter) (*cacheInstruments, error) {
-	rejectedCounter, err := meter.Int64Counter("groupcache.cache.rejected",
+	rejectedCounter, err := meter.Int64ObservableCounter("groupcache.cache.rejected",
 		metric.WithDescription("Total number of items rejected from cache"),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	bytesGauge, err := meter.Int64UpDownCounter(
+	bytesGauge, err := meter.Int64ObservableUpDownCounter(
 		"groupcache.cache.bytes",
 		metric.WithDescription("Number of bytes in cache"),
 	)
@@ -304,7 +304,7 @@ func newCacheInstruments(meter metric.Meter) (*cacheInstruments, error) {
 		return nil, err
 	}
 
-	itemsGauge, err := meter.Int64UpDownCounter(
+	itemsGauge, err := meter.Int64ObservableUpDownCounter(
 		"groupcache.cache.items",
 		metric.WithDescription("Number of items in cache"),
 	)
@@ -312,7 +312,7 @@ func newCacheInstruments(meter metric.Meter) (*cacheInstruments, error) {
 		return nil, err
 	}
 
-	getsCounter, err := meter.Int64Counter(
+	getsCounter, err := meter.Int64ObservableCounter(
 		"groupcache.cache.gets",
 		metric.WithDescription("Total get requests"),
 	)
@@ -320,7 +320,7 @@ func newCacheInstruments(meter metric.Meter) (*cacheInstruments, error) {
 		return nil, err
 	}
 
-	hitsCounter, err := meter.Int64Counter(
+	hitsCounter, err := meter.Int64ObservableCounter(
 		"groupcache.cache.hits",
 		metric.WithDescription("Total successful cache hits"),
 	)
@@ -328,7 +328,7 @@ func newCacheInstruments(meter metric.Meter) (*cacheInstruments, error) {
 		return nil, err
 	}
 
-	evictionsCounter, err := meter.Int64Counter(
+	evictionsCounter, err := meter.Int64ObservableCounter(
 		"groupcache.cache.evictions",
 		metric.WithDescription("Total number of evictions"),
 	)
@@ -346,26 +346,26 @@ func newCacheInstruments(meter metric.Meter) (*cacheInstruments, error) {
 	}, nil
 }
 
-func (cm *cacheInstruments) RejectedCounter() metric.Int64Counter {
+func (cm *cacheInstruments) RejectedCounter() metric.Int64ObservableCounter {
 	return cm.rejectedCounter
 }
 
-func (cm *cacheInstruments) BytesGauge() metric.Int64UpDownCounter {
+func (cm *cacheInstruments) BytesGauge() metric.Int64ObservableUpDownCounter {
 	return cm.bytesGauge
 }
 
-func (cm *cacheInstruments) ItemsGauge() metric.Int64UpDownCounter {
+func (cm *cacheInstruments) ItemsGauge() metric.Int64ObservableUpDownCounter {
 	return cm.itemsGauge
 }
 
-func (cm *cacheInstruments) GetsCounter() metric.Int64Counter {
+func (cm *cacheInstruments) GetsCounter() metric.Int64ObservableCounter {
 	return cm.getsCounter
 }
 
-func (cm *cacheInstruments) HitsCounter() metric.Int64Counter {
+func (cm *cacheInstruments) HitsCounter() metric.Int64ObservableCounter {
 	return cm.hitsCounter
 }
 
-func (cm *cacheInstruments) EvictionsCounter() metric.Int64Counter {
+func (cm *cacheInstruments) EvictionsCounter() metric.Int64ObservableCounter {
 	return cm.evictionsCounter
 }

@@ -622,5 +622,67 @@ func (g *group) registerInstruments(meter otelmetric.Meter) error {
 		instruments.RemovedKeysCounter(),
 	)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Register cache-level instruments for mainCache and hotCache
+	if err := g.registerCacheInstruments(meter); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (g *group) registerCacheInstruments(meter otelmetric.Meter) error {
+	cacheInstr, err := newCacheInstruments(meter)
+	if err != nil {
+		return err
+	}
+
+	type namedCache struct {
+		name  string
+		cache func() Cache
+	}
+
+	caches := []namedCache{
+		{name: "main", cache: func() Cache { return g.mainCache }},
+		{name: "hot", cache: func() Cache { return g.hotCache }},
+	}
+
+	for _, nc := range caches {
+		observeOptions := []otelmetric.ObserveOption{
+			otelmetric.WithAttributes(
+				attribute.String("group.name", g.Name()),
+				attribute.String("cache.type", nc.name),
+			),
+		}
+
+		_, err := meter.RegisterCallback(func(ctx context.Context, o otelmetric.Observer) error {
+			c := nc.cache()
+			if c == nil {
+				return nil
+			}
+			stats := c.Stats()
+			o.ObserveInt64(cacheInstr.RejectedCounter(), stats.Rejected, observeOptions...)
+			o.ObserveInt64(cacheInstr.BytesGauge(), stats.Bytes, observeOptions...)
+			o.ObserveInt64(cacheInstr.ItemsGauge(), stats.Items, observeOptions...)
+			o.ObserveInt64(cacheInstr.GetsCounter(), stats.Gets, observeOptions...)
+			o.ObserveInt64(cacheInstr.HitsCounter(), stats.Hits, observeOptions...)
+			o.ObserveInt64(cacheInstr.EvictionsCounter(), stats.Evictions, observeOptions...)
+			return nil
+		},
+			cacheInstr.RejectedCounter(),
+			cacheInstr.BytesGauge(),
+			cacheInstr.ItemsGauge(),
+			cacheInstr.GetsCounter(),
+			cacheInstr.HitsCounter(),
+			cacheInstr.EvictionsCounter(),
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
