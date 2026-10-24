@@ -19,55 +19,44 @@ like MEMCACHED and REDIS in many scenarios.
 - Load Protection: Prevents the thundering herd problem through the use of `singleflight` synchronization
 
 ## Design
-Most caches are a separate fleet of servers you have to run, size, and keep alive. Groupcache is a
-library. Import it, hand each process a list of its peers, and your app servers become the cache.
-There is nothing else to deploy.
+Groupcache is a Go library for caching across a cluster of processes. Every process that imports it
+holds part of the cache and serves that part to the others, so there are no cache servers to run.
+Each process is given the list of its peers through [`SetPeers()`](instance.go), and gets a new list
+whenever peers join or leave.
 
 <div align="center">
 <img src="docs/simplified-diagram.png" alt="Simplified Diagram" width="500" /><br />
 </div>
 
-**Every key has one home.** Peers sit on a [consistent hash ring](transport/peer/picker.go), so any
-peer finds a key's owner with a local hash lookup, and no network call. When a peer joins or leaves, only a small share of
-keys move. Call [`SetPeers()`](instance.go) whenever your topology changes.
+**Each key has one owner at a time.** Peers sit on a [consistent hash ring](transport/peer/picker.go),
+and a process finds a key's owner by hashing the key against its own copy of the ring. When a peer
+joins or leaves, only the keys on its part of the ring change owner.
 
-**A miss runs your code, once.** Give each group a [`Getter`](group.go) that fetches from your
-database or service. On a miss it runs, and the value is cached and returned to everyone who asked.
-Concurrent requests for the same key wait on one in-flight load through
-[`singleflight`](internal/singleflight/singleflight.go). A million simultaneous `Get("FOO")` calls
-on one peer run your `Getter` once, and calls arriving from other peers join the same load, so
-the cluster normally runs it once. After a cold start or a burst on one hot key, your
-database sees one query per key, not one per caller.
+**A miss goes to the owner.** `Get()` looks in the local caches first. On a miss, a process that
+doesn't own the key asks the owner, and the owner runs your [`Getter`](group.go), the function that
+fetches the value from your database or service, then caches the result. A process keeps a copy of
+what it fetched from other peers in its hot cache, so popular keys are served locally.
 
-**A dead owner doesn't take you down.** If a peer can't get an answer from a key's owner (refused
-connection, transport timeout, bad response), it loads the value itself, still deduplicated, and
-the request succeeds. The fallback is skipped when the owner answers "not found" or "unavailable"
-(HTTP 404 and 503), or when the caller's own context is cancelled or past its deadline.
+**Concurrent misses share one load.** Callers asking for the same missing key wait on a single
+in-flight load through [`singleflight`](internal/singleflight/singleflight.go), and requests from
+other peers join it. A million simultaneous `Get("FOO")` calls run your `Getter` once. If a peer
+can't reach the owner, it runs the `Getter` itself instead of failing the request.
 
-**Hot keys spread themselves.** Each group keeps a main cache for keys this peer loaded or was sent
-by a `Set()`, and a hot cache for copies of keys it fetched from other peers. A key that every peer
-asks for ends up in every peer's hot cache, so its owner isn't the bottleneck. The hot cache is 1/8
-of the group's memory limit and the main cache is 7/8.
+**Writes reach the whole cluster.** `Set()`, `Remove()` and `RemoveKeys()` go to the owner and then to
+every other peer. Delivery is best effort, so put an expiry on your values to cap how long a missed
+update can live. Expiry is checked when a value is read, and needs no coordination between peers
+beyond keeping their clocks in sync.
 
-**Writes reach the whole cluster.** [`Set()`](group.go) goes to the owner and then to every other
-peer. `Remove()` and `RemoveKeys()` clear the key on the owner and on every other peer. Delivery is
-best effort, so put an expiry on values to cap how long a missed update can live.
+**The parts are swappable.** The default cache is an LRU, and the [Otter cache](contrib/otter.go) uses
+lock-free S3-FIFO eviction for machines with many cores (see
+[Pluggable Internal Cache](#pluggable-internal-cache)). HTTP is the default transport, and you can
+write your own against the [`transport.Transport`](transport/http_transport.go) interface.
 
-**Expiry needs no coordination.** A value can carry an expiry time, and a `Get()` that finds it
-expired drops it. No peer talks to another about it, so keep clocks in sync across the cluster.
+**It reports on itself.** Stats are exposed as OpenTelemetry metrics, and the HTTP transport can emit
+OpenTelemetry traces for peer calls.
 
-**Swap the parts you want to.**
-- Caches. The default is an LRU. The [Otter cache](contrib/otter.go) uses lock-free S3-FIFO eviction
-  and suits machines with many cores. See [Pluggable Internal Cache](#pluggable-internal-cache).
-- Transports. HTTP is the default. Write your own against the
-  [`transport.Transport`](transport/http_transport.go) interface.
-- The hash function and replica count for the ring.
-
-**See what it's doing.** Group and cache stats are exposed as OpenTelemetry metrics, and the HTTP
-transport can emit OpenTelemetry traces for peer calls.
-
-**Run a whole cluster in one process.** There is no global state, so you can start several instances
-in a single process. The [`cluster`](cluster) package does this for tests.
+**There is no global state.** You can run several instances in one process, and the
+[`cluster`](cluster) package uses this to start a whole cluster inside a test.
 
 The sequence diagram under [The Cache Loading process](#the-cache-loading-process) walks one `Get()`
 through these steps.
