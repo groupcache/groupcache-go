@@ -29,8 +29,7 @@ whenever peers join or leave.
 </div>
 
 **Each key has one owner at a time.** Peers sit on a [consistent hash ring](transport/peer/picker.go),
-and a process finds a key's owner by hashing the key against its own copy of the ring. When a peer
-joins or leaves, only the keys on its part of the ring change owner.
+and a process finds a key's owner by hashing the key against its own copy of the ring.
 
 **A miss goes to the owner.** `Get()` looks in the local caches first. On a miss, a process that
 doesn't own the key asks the owner, and the owner runs your [`Getter`](group.go), the function that
