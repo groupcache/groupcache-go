@@ -28,7 +28,7 @@ There is nothing else to deploy.
 </div>
 
 **Every key has one home.** Peers sit on a [consistent hash ring](transport/peer/picker.go), so any
-peer can tell, with no lookup, which peer owns a key. When a peer joins or leaves, only a small share of
+peer finds a key's owner with a local hash lookup, and no network call. When a peer joins or leaves, only a small share of
 keys move. Call [`SetPeers()`](instance.go) whenever your topology changes.
 
 **A miss runs your code, once.** Give each group a [`Getter`](group.go) that fetches from your
@@ -36,8 +36,8 @@ database or service. On a miss it runs, and the value is cached and returned to 
 Concurrent requests for the same key wait on one in-flight load through
 [`singleflight`](internal/singleflight/singleflight.go). A million simultaneous `Get("FOO")` calls
 on one peer run your `Getter` once, and calls arriving from other peers join the same load, so
-the cluster normally runs it once. The stampede that follows a cold cache or a hot key
-never reaches your database.
+the cluster normally runs it once. After a cold start or a burst on one hot key, your
+database sees one query per key, not one per caller.
 
 **A dead owner doesn't take you down.** If a peer can't get an answer from a key's owner (refused
 connection, transport timeout, bad response), it loads the value itself, still deduplicated, and
