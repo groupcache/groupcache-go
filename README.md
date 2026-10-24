@@ -18,28 +18,48 @@ like MEMCACHED and REDIS in many scenarios.
 - Increased efficiency: Minimizes network calls to external systems and data sources
 - Load Protection: Prevents the thundering herd problem through the use of `singleflight` synchronization
 
-## How It Works
-Groupcache functions as an in-memory read-through cache with the following workflow:
-- When your application requests data, Groupcache uses key sharding to determine key ownership
-- For locally-owned keys:
-    - If the key exists in the local cache, data is returned immediately
-    - If the key is missing, Groupcache retrieves it from the data source, caches it, and returns it
-    - Future requests for the same key are served directly from the hot cache
-- For keys owned by other peers:
-    - Groupcache forwards the request to the appropriate peer instance
-    - The owning peer handles the cache lookup and retrieval process
-
-This architecture provides the following benefits:
-- Network efficiency by avoiding requests for locally-owned keys
-- Load protection by channeling identical key requests to a single Groupcache instance within the cluster
-- Avoid unnecessary network calls to external cache systems by using local memory for the cache
-
-Thanks to `singleflight` synchronization, even if your application makes millions of requests for a 
-specific key (e.g., "FOO"), Groupcache will only query the underlying data source once.
+## Design
+Groupcache is a Go library for caching across a cluster of processes. Every process that imports it
+holds part of the cache and serves that part to the others, so there are no cache servers to run.
+Each process is given the list of its peers through [`SetPeers()`](instance.go), and gets a new list
+whenever peers join or leave.
 
 <div align="center">
 <img src="docs/simplified-diagram.png" alt="Simplified Diagram" width="500" /><br />
 </div>
+
+**Each key has one owner at a time.** Peers sit on a [consistent hash ring](transport/peer/picker.go),
+and a process finds a key's owner by hashing the key against its own copy of the ring. When a peer
+joins or leaves, only the keys on its part of the ring change owner.
+
+**A miss goes to the owner.** `Get()` looks in the local caches first. On a miss, a process that
+doesn't own the key asks the owner, and the owner runs your [`Getter`](group.go), the function that
+fetches the value from your database or service, then caches the result. A process keeps a copy of
+what it fetched from other peers in its hot cache, so popular keys are served locally.
+
+**Concurrent misses share one load.** Callers asking for the same missing key wait on a single
+in-flight load through [`singleflight`](internal/singleflight/singleflight.go), and requests from
+other peers join it. A million simultaneous `Get("FOO")` calls run your `Getter` once. If a peer
+can't reach the owner, it runs the `Getter` itself instead of failing the request.
+
+**Writes reach the whole cluster.** `Set()`, `Remove()` and `RemoveKeys()` go to the owner and then to
+every other peer. Delivery is best effort, so put an expiry on your values to cap how long a missed
+update can live. Expiry is checked when a value is read, and needs no coordination between peers
+beyond keeping their clocks in sync.
+
+**The parts are swappable.** The default cache is an LRU, and the [Otter cache](contrib/otter.go) uses
+lock-free S3-FIFO eviction for machines with many cores (see
+[Pluggable Internal Cache](#pluggable-internal-cache)). HTTP is the default transport, and you can
+write your own against the [`transport.Transport`](transport/http_transport.go) interface.
+
+**It reports on itself.** Stats are exposed as OpenTelemetry metrics, and the HTTP transport can emit
+OpenTelemetry traces for peer calls.
+
+**There is no global state.** You can run several instances in one process, and the
+[`cluster`](cluster) package uses this to start a whole cluster inside a test.
+
+The sequence diagram under [The Cache Loading process](#the-cache-loading-process) walks one `Get()`
+through these steps.
 
 ## Usage
 
@@ -150,16 +170,16 @@ In a nutshell, a groupcache lookup of **Get("foo")** looks like:
 
 (On machine #5 of a set of N machines running the same code)
 
-1. Is the value of FOO in local cache because it's super hot?  If so, use it.
-2. Is the value of FOO in local memory because peer #5 (the current
-   peer) is the owner of it?  If so, use it.
+1. Is the value of FOO in local memory because peer #5 (the current
+   peer) loaded it or was sent it by a `Set()`?  If so, use it.
+2. Is the value of FOO in the local hot cache because it's super hot?  If so, use it.
 3. Amongst all the peers in my set of N, am I the owner of the key
    FOO?  (e.g. does it consistent hash to 5?)  If so, load it and
    store in the local cache.  If other callers come in, via the same
    process or via RPC requests from peers, they block waiting for the load
    to finish and get the same answer.  If not, RPC to the peer that's the
-   owner and get the answer.  If the RPC fails, just load it locally (still with
-   local dup suppression).
+   owner and get the answer.  If the RPC fails to get an answer (see Design for the
+   exceptions), just load it locally (still with local dup suppression).
 
 <img src="docs/sequence-diagram.svg" alt="Simplified Diagram" width="800" /><br />
 
@@ -345,9 +365,9 @@ accessed by other peers in the cluster.
 
 ### groupcache.Cache
 Is the cache implementation used for both the "hot" and "main" caches. The "main cache" stores items the local
-group "owns" and the "hot cache" stores items this instance has retrieved from a remote peer. The "main cache" is
-7/8th the size of the max bytes requested when calling `Instance.NewGroup()`. The "hot cache" is 1/8th the size of 
-the "main cache".
+group loaded as owner or was sent by a `Set()`, and the "hot cache" stores items this instance has retrieved from a remote peer. The "main cache" is
+7/8th the size of the max bytes requested when calling `Instance.NewGroup()`. The "hot cache" is 1/8th of the max
+bytes requested, which makes it 1/7th the size of the "main cache".
 
 Third party cache implementations can be used by providing an `Options.CacheFactory` function which returns the
 third party initialized cache of the requested size. Groupcache includes an optional 
