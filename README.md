@@ -13,33 +13,60 @@ Distributed Cache Library
 Groupcache is a Go-based caching and cache-filling library designed to replace traditional caching solutions
 like MEMCACHED and REDIS in many scenarios.
 
-## Why Use Groupcache?
-- Cost Reduction: Eliminates the need for external system dependencies and additional server infrastructure
-- Increased efficiency: Minimizes network calls to external systems and data sources
-- Load Protection: Prevents the thundering herd problem through the use of `singleflight` synchronization
-
-## How It Works
-Groupcache functions as an in-memory read-through cache with the following workflow:
-- When your application requests data, Groupcache uses key sharding to determine key ownership
-- For locally-owned keys:
-    - If the key exists in the local cache, data is returned immediately
-    - If the key is missing, Groupcache retrieves it from the data source, caches it, and returns it
-    - Future requests for the same key are served directly from the hot cache
-- For keys owned by other peers:
-    - Groupcache forwards the request to the appropriate peer instance
-    - The owning peer handles the cache lookup and retrieval process
-
-This architecture provides the following benefits:
-- Network efficiency by avoiding requests for locally-owned keys
-- Load protection by channeling identical key requests to a single Groupcache instance within the cluster
-- Avoid unnecessary network calls to external cache systems by using local memory for the cache
-
-Thanks to `singleflight` synchronization, even if your application makes millions of requests for a 
-specific key (e.g., "FOO"), Groupcache will only query the underlying data source once.
+## Design
+Groupcache is a library, not a service. Every process that imports it is both a client and a cache
+server, and the processes find each other through the peer list you give them. There is nothing
+else to deploy.
 
 <div align="center">
 <img src="docs/simplified-diagram.png" alt="Simplified Diagram" width="500" /><br />
 </div>
+
+**Every key has one owner.** Peers sit on a [consistent hash ring](transport/peer/picker.go), so
+each key maps to exactly one peer. When peers join or leave, only a small share of keys change
+owner. Call [`SetPeers()`](instance.go) whenever the topology changes.
+
+**Misses load through your code.** You give each group a [`Getter`](group.go) that fetches a value from
+your database or service. On a miss the owner calls it, stores the result, and returns it. A
+`Get()` never asks the caller to fill the cache.
+
+**One load per key.** Concurrent requests for a missing key wait on a single in-flight load, through
+[`singleflight`](internal/singleflight/singleflight.go). A million simultaneous `Get("FOO")` calls on
+one peer run your `Getter` once. Requests that arrive at the owner from other peers join the same load,
+so the cluster normally runs it once.
+
+**Peers fall back to loading locally.** If a peer can't get an answer from the owner (a refused
+connection, a transport timeout, a bad response), it loads the value itself, still with in-flight
+dedup, instead of failing the request. The fallback is skipped when the owner answers "not found" or
+"unavailable" (HTTP 404 and 503), or when the caller's own context is cancelled or past its deadline.
+
+**Popular keys are copied.** Each group has a main cache for keys this peer loaded or was sent by a `Set()`, and a hot cache for
+copies of keys fetched from other peers. A key that every peer asks for ends up in every peer's hot
+cache, so one owner doesn't take all the traffic. The hot cache is 1/8 of the group's memory limit
+and the main cache is 7/8.
+
+**Writes reach the cluster.** [`Set()`](group.go) writes to the owner and then to every other peer.
+`Remove()` and `RemoveKeys()` clear the key on the owner and on every other peer. Delivery is
+best effort, so put an expiry on values to bound how long a missed update can last.
+
+**Expiry is checked on read.** A value can carry an expiry time, and the cache drops it when a `Get()`
+finds it expired. No peer coordinates expiry, which means clocks across the cluster should be in sync.
+
+**Everything with a seam is pluggable.**
+- Caches. The default is an LRU. The [Otter cache](contrib/otter.go) uses lock-free S3-FIFO eviction and suits
+  machines with many cores. See [Pluggable Internal Cache](#pluggable-internal-cache).
+- Transports. HTTP is the default, and you can write your own against the
+  [`transport.Transport`](transport/http_transport.go) interface.
+- Hash function and replica count for the ring.
+
+**Observable.** Group and cache stats are exposed as OpenTelemetry metrics, and the HTTP transport
+can emit OpenTelemetry traces for peer calls.
+
+**Many instances per process.** There is no global state, so tests (and the [`cluster`](cluster)
+package) can run a whole cluster inside one process.
+
+The sequence diagram under [The Cache Loading process](#the-cache-loading-process) shows these
+steps for a single `Get()`.
 
 ## Usage
 
@@ -150,16 +177,16 @@ In a nutshell, a groupcache lookup of **Get("foo")** looks like:
 
 (On machine #5 of a set of N machines running the same code)
 
-1. Is the value of FOO in local cache because it's super hot?  If so, use it.
-2. Is the value of FOO in local memory because peer #5 (the current
-   peer) is the owner of it?  If so, use it.
+1. Is the value of FOO in local memory because peer #5 (the current
+   peer) loaded it or was sent it by a `Set()`?  If so, use it.
+2. Is the value of FOO in the local hot cache because it's super hot?  If so, use it.
 3. Amongst all the peers in my set of N, am I the owner of the key
    FOO?  (e.g. does it consistent hash to 5?)  If so, load it and
    store in the local cache.  If other callers come in, via the same
    process or via RPC requests from peers, they block waiting for the load
    to finish and get the same answer.  If not, RPC to the peer that's the
-   owner and get the answer.  If the RPC fails, just load it locally (still with
-   local dup suppression).
+   owner and get the answer.  If the RPC fails to get an answer (see Design for the
+   exceptions), just load it locally (still with local dup suppression).
 
 <img src="docs/sequence-diagram.svg" alt="Simplified Diagram" width="800" /><br />
 
@@ -345,9 +372,9 @@ accessed by other peers in the cluster.
 
 ### groupcache.Cache
 Is the cache implementation used for both the "hot" and "main" caches. The "main cache" stores items the local
-group "owns" and the "hot cache" stores items this instance has retrieved from a remote peer. The "main cache" is
-7/8th the size of the max bytes requested when calling `Instance.NewGroup()`. The "hot cache" is 1/8th the size of 
-the "main cache".
+group loaded as owner or was sent by a `Set()`, and the "hot cache" stores items this instance has retrieved from a remote peer. The "main cache" is
+7/8th the size of the max bytes requested when calling `Instance.NewGroup()`. The "hot cache" is 1/8th of the max
+bytes requested, which makes it 1/7th the size of the "main cache".
 
 Third party cache implementations can be used by providing an `Options.CacheFactory` function which returns the
 third party initialized cache of the requested size. Groupcache includes an optional 
