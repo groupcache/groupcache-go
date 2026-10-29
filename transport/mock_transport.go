@@ -182,7 +182,7 @@ func (s *peerStats) Report() string {
 	// Map keys have no guaranteed order, so we sort the keys here.
 	slices.Sort(sorted)
 	for i := 0; i < len(sorted); i++ {
-		b.WriteString(fmt.Sprintf("%s = %d ", sorted[i], s.stats[sorted[i]]))
+		fmt.Fprintf(&b, "%s = %d ", sorted[i], s.stats[sorted[i]])
 	}
 	return strings.TrimSpace(b.String())
 }

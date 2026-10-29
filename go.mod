@@ -1,6 +1,6 @@
 module github.com/groupcache/groupcache-go/v3
 
-go 1.24.0
+go 1.26.10
 
 require (
 	github.com/kapetan-io/tackle v0.13.0

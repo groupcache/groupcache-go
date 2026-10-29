@@ -13,12 +13,7 @@ on:
 jobs:
   on-pull-request:
     name: test
-    strategy:
-      matrix:
-        go-version:
-          - 1.24.x
-        os: [ ubuntu-latest ]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -26,7 +21,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version-file: go.mod
           cache: true # caching and restoring go modules and build outputs
 
       - run: go env
@@ -45,7 +40,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.6.1
+          version: v2.15.0
           skip-cache: true  # cache/restore is done by actions/setup-go@v3 step
           args: -v
 
