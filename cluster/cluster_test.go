@@ -17,8 +17,13 @@ limitations under the License.
 package cluster_test
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/groupcache/groupcache-go/v3"
 	"github.com/groupcache/groupcache-go/v3/cluster"
@@ -80,4 +85,34 @@ func TestStartWithInvalidPeer(t *testing.T) {
 	assert.Nil(t, cluster.ListPeers())
 	assert.Nil(t, cluster.ListDaemons())
 	require.NoError(t, cluster.Shutdown(context.Background()))
+}
+
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
+
+func TestStartLogsEveryDaemonToLogger(t *testing.T) {
+	var out syncBuffer
+	logger := slog.New(slog.NewTextHandler(&out, nil))
+
+	require.NoError(t, cluster.Start(context.Background(), 3, groupcache.Options{Logger: logger}))
+	defer func() { require.NoError(t, cluster.Shutdown(context.Background())) }()
+
+	// The listening message is logged from a goroutine after the server starts.
+	require.Eventually(t, func() bool {
+		return strings.Count(out.String(), "Listening on") == 3
+	}, 5*time.Second, 10*time.Millisecond)
 }
