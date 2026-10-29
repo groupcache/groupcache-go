@@ -102,7 +102,7 @@ func StartWith(ctx context.Context, peers []peer.Info, opts groupcache.Options) 
 
 	var parent transport.Transport
 	if opts.Transport == nil {
-		parent = transport.NewHttpTransport(transport.HttpTransportOptions{})
+		parent = transport.NewHttpTransport(transport.HttpTransportOptions{Logger: opts.Logger})
 	} else {
 		parent = opts.Transport
 	}

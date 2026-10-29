@@ -84,7 +84,7 @@ func New(opts Options) *Instance {
 	}
 
 	if opts.Transport == nil {
-		opts.Transport = transport.NewHttpTransport(transport.HttpTransportOptions{})
+		opts.Transport = transport.NewHttpTransport(transport.HttpTransportOptions{Logger: opts.Logger})
 	}
 
 	i := &Instance{
