@@ -19,6 +19,7 @@ package groupcache_test
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -79,6 +80,52 @@ func TestRemoveKeys(t *testing.T) {
 	// Verify getter was called again for each key
 	for _, key := range keys {
 		assert.Equal(t, 2, callCount[key])
+	}
+}
+
+func TestRemoveKeysClearsCallerCopies(t *testing.T) {
+	ctx := context.Background()
+
+	err := cluster.Start(ctx, 3, groupcache.Options{})
+	require.NoError(t, err)
+	defer func() { _ = cluster.Shutdown(ctx) }()
+
+	var mu sync.Mutex
+	loads := make(map[string]int)
+	getter := groupcache.GetterFunc(func(ctx context.Context, key string, dest transport.Sink) error {
+		mu.Lock()
+		loads[key]++
+		mu.Unlock()
+		return dest.SetString(fmt.Sprintf("value-%s", key), time.Now().Add(time.Minute*5))
+	})
+
+	var group transport.Group
+	for i := 0; i < 3; i++ {
+		g, err := cluster.DaemonAt(i).NewGroup("test-remove-keys-caller", 3000000, getter)
+		require.NoError(t, err)
+		if i == 0 {
+			group = g
+		}
+	}
+
+	// Keys a-e are spread across the three daemons, so some are owned by peers other than daemon 0.
+	keys := []string{"a", "b", "c", "d", "e"}
+	for _, key := range keys {
+		var value string
+		require.NoError(t, group.Get(ctx, key, transport.StringSink(&value)))
+	}
+
+	require.NoError(t, group.RemoveKeys(ctx, keys...))
+
+	for _, key := range keys {
+		var value string
+		require.NoError(t, group.Get(ctx, key, transport.StringSink(&value)))
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	for _, key := range keys {
+		assert.Equal(t, 2, loads[key], key)
 	}
 }
 

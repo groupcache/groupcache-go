@@ -459,18 +459,16 @@ func (g *group) RemoveKeys(ctx context.Context, keys ...string) error {
 	g.Stats.RemovedKeys.Add(int64(len(keys)))
 
 	keysByOwner := make(map[peer.Client][]string)
-	var localKeys []string
 
 	for _, key := range keys {
-		owner, isRemote := g.instance.PickPeer(key)
-		if isRemote {
+		if owner, isRemote := g.instance.PickPeer(key); isRemote {
 			keysByOwner[owner] = append(keysByOwner[owner], key)
-		} else {
-			localKeys = append(localKeys, key)
 		}
 	}
 
-	for _, key := range localKeys {
+	// A non-owner may hold the key in its hot cache, so clear every key here
+	// whether or not an owner request later fails.
+	for _, key := range keys {
 		g.LocalRemove(key)
 	}
 
