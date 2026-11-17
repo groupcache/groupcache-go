@@ -1,0 +1,12 @@
+#!/bin/sh
+# Runs Tiger before every push. While the repository has findings this only
+# warns. Enable with: git config core.hooksPath .githooks
+
+if ! command -v tiger >/dev/null 2>&1; then
+	echo "pre-push: tiger is not installed, skipping. Install it with:"
+	echo "  go install github.com/kapetan-io/tiger/cmd/tiger@latest"
+	exit 0
+fi
+
+make tiger || echo "pre-push: Tiger did not come back clean; pushing anyway (warn only)."
+exit 0

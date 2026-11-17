@@ -28,3 +28,16 @@ bench: ## Run Go benchmarks
 .PHONY: proto
 proto: ## Build protos
 	./buf.gen.yaml
+
+# Tiger reads the Go toolchain at run time, so pin it to the go.mod version.
+# A newer local Go makes every package fail to load (tiger exit 2).
+# make exits 2 on any failing recipe, so the message says which Tiger result it was.
+.PHONY: tiger
+tiger: ## Run the Tiger static analyzer
+	@command -v tiger >/dev/null || { echo "tiger is not installed; run: go install github.com/kapetan-io/tiger/cmd/tiger@latest"; exit 2; }
+	@GOTOOLCHAIN=go$$(go list -m -f '{{.GoVersion}}') tiger check ./...; rc=$$?; \
+	case $$rc in \
+	0) ;; \
+	1) echo "tiger: findings (exit 1)";; \
+	*) echo "tiger: could not check the packages (exit $$rc)";; \
+	esac; exit $$rc
